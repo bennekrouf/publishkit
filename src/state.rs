@@ -246,6 +246,27 @@ impl ProjectConfig {
     }
 }
 
+/// Every post file of the project with its modification time, sorted: when it differs from the
+/// last one, a post was added, changed, moved or deleted, here or by `publishkit mcp`.
+pub fn content_stamp(project_path: &str) -> Vec<(PathBuf, std::time::SystemTime)> {
+    let config = ProjectConfig::load(project_path);
+    let mut stamp = Vec::new();
+    for lang in config.languages() {
+        let (queue, blog) = config.resolve_paths(project_path, &lang);
+        let (li_queue, li_published) = config.resolve_linkedin_paths(project_path, &lang);
+        for dir in [queue, blog, li_queue, li_published] {
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for e in entries.filter_map(|e| e.ok()) {
+                if let Ok(modified) = e.metadata().and_then(|m| m.modified()) {
+                    stamp.push((e.path(), modified));
+                }
+            }
+        }
+    }
+    stamp.sort();
+    stamp
+}
+
 pub fn load_posts(project_path: &str) -> ProjectPosts {
     let config = ProjectConfig::load(project_path);
     let (queue_fr, blog_fr) = config.resolve_paths(project_path, "fr");

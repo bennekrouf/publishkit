@@ -15,6 +15,18 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- Use PublishKit from Claude. The new **MCP** button in the top bar shows what
+  to paste into Claude Desktop, or the one line to run for Claude Code,
+  already pointing at where PublishKit is installed. Claude can then read your
+  site's posts, write and queue drafts in each language (or have PublishKit's
+  own model write them), edit drafts, set their LinkedIn and X teasers, queue
+  LinkedIn posts, and publish or delete drafts when you ask. The lists in the
+  window follow within a couple of seconds.
+
 ## [0.1.12] - 2026-10-16
 
 ### Added
