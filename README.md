@@ -77,6 +77,19 @@ Click a queued post to open it in the center editor. Edit the raw markdown, then
 
 ---
 
+## Use from Claude (MCP)
+
+`publishkit mcp` serves the site's posts to an MCP client over stdio, with no window
+(`src/mcp.rs`); the **MCP** button in the top bar shows the Claude Desktop config and the
+Claude Code command. The tools: `project`, `list_posts`, `get_post`, `queue_post`,
+`update_post`, `set_social`, `publish_post`, `delete_post` and `queue_linkedin`. They call
+the app's own `state` and `api` functions, so files, front matter, slugs and the publish
+step are the same; the configured model is only called when a tool is asked to generate.
+They default to the site open in the app. The window checks the post folders every 2 s and
+reloads its lists when something changed.
+
+---
+
 ## LLM configuration
 
 Click the **⚙** gear icon in the top bar to open Settings.

@@ -464,3 +464,17 @@ input:focus, textarea:focus { border-color: var(--blue); background: var(--bg0);
   cursor: pointer;
 }
 .consent-banner-button:hover { background: rgba(255, 255, 255, 0.15); }
+
+/* "Use PublishKit from Claude": what to paste, and where. */
+.mcp-modal { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.mcp-lead { font-size: 12.5px; line-height: 1.6; }
+.mcp-snippet-wrap { position: relative; }
+.mcp-snippet {
+  margin: 0; padding: 10px 76px 10px 12px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg0); color: var(--text1);
+  font: 11.5px var(--mono); line-height: 1.5;
+  white-space: pre-wrap; word-break: break-all; user-select: text; -webkit-user-select: text;
+}
+.mcp-copy { position: absolute; top: 6px; right: 6px; }
+.mcp-path, .mcp-note code { word-break: break-all; }
+.mcp-note { padding: 9px 11px; border-radius: 6px; background: var(--bg2); line-height: 1.6; }

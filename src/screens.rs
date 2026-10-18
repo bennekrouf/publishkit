@@ -1,5 +1,5 @@
 use crate::api;
-use crate::state::{AppConfig, LinkedInPost, LlmProvider, Post, ProjectConfig, ProjectPosts, load_posts};
+use crate::state::{AppConfig, LinkedInPost, LlmProvider, Post, ProjectConfig, ProjectPosts, content_stamp, load_posts};
 use dioxus::prelude::*;
 use pulldown_cmark::{Parser, Options, html};
 
@@ -144,6 +144,26 @@ fn MainLayout(
     li_selected: Signal<Option<LinkedInPost>>,
     mut is_light: Signal<bool>,
 ) -> Element {
+    let mut show_mcp = use_signal(|| false);
+    // What Claude changes through `publishkit mcp` shows up in the lists.
+    use_future(move || async move {
+        let mut last: Option<Vec<(std::path::PathBuf, std::time::SystemTime)>> = None;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let Some(project) = config.peek().project_path.clone() else { continue };
+            let stamp = tokio::task::spawn_blocking({
+                let project = project.clone();
+                move || content_stamp(&project)
+            })
+            .await
+            .unwrap_or_default();
+            if last.as_ref().is_some_and(|l| *l != stamp) {
+                let mut posts = posts;
+                posts.set(load_posts(&project));
+            }
+            last = Some(stamp);
+        }
+    });
     rsx! {
         div { class: "layout",
             div { class: "topbar",
@@ -199,6 +219,12 @@ fn MainLayout(
                     },
                     if *is_light.read() { "🌙" } else { "☀" }
                 }
+                button {
+                    class: "btn-small",
+                    title: "Use PublishKit from Claude Desktop or Claude Code",
+                    onclick: move |_| show_mcp.set(true),
+                    "MCP"
+                }
                 // gear icon button
                 button {
                     class: "btn-icon",
@@ -226,6 +252,9 @@ fn MainLayout(
             // Settings modal overlay
             if *show_settings.read() {
                 SettingsModal { config, show_settings }
+            }
+            if show_mcp() {
+                crate::mcp::McpModal { show: show_mcp }
             }
         }
     }
@@ -984,7 +1013,7 @@ fn LinkedInPreviewPanel(li_selected: Signal<Option<LinkedInPost>>) -> Element {
     }
 }
 
-fn copy_to_clipboard(text: &str) {
+pub(crate) fn copy_to_clipboard(text: &str) {
     // Dioxus desktop runs in a webview — use JS clipboard API via document eval
     let escaped = text.replace('\\', "\\\\").replace('`', "\\`").replace("${", "\\${");
     let js = format!("navigator.clipboard.writeText(`{escaped}`)");
