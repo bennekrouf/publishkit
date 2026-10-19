@@ -15,6 +15,14 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- The app icon has been updated to a new design, featuring a page with a folded
+  corner and text lines, along with a paper plane leaving it. The new icon gives
+  a modern and cohesive look to the application.
+
 ## [0.1.14] - 2026-10-19
 
 ### Changed
