@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5a524"/>
+      <stop offset="100%" stop-color="#9a4a0a"/>
+    </linearGradient>
+    <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="512" cy="358" r="716">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#fff4e3"/>
+    </radialGradient>
+    <filter id="soft" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="230" fill="url(#bg)"/>
+
+  <!-- a page with a folded corner and text lines, and a paper plane leaving
+       it — the same reduced-geometry, glowing-white language as the sibling
+       app icons (branch glyph, play triangle, dot-chain). -->
+  <g filter="url(#soft)" fill="none" stroke="url(#glow)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 220 220 L 470 220 L 570 320 L 570 520"/>
+    <path d="M 570 700 L 570 804 L 220 804 L 220 220"/>
+    <path d="M 470 220 L 470 320 L 570 320"/>
+    <path d="M 300 430 L 490 430"/>
+    <path d="M 300 530 L 450 530"/>
+    <path d="M 300 630 L 410 630"/>
+    <path d="M 300 720 L 470 720"/>
+  </g>
+
+  <g filter="url(#soft)" fill="url(#glow)" stroke="url(#glow)" stroke-width="20" stroke-linejoin="round">
+    <path d="M 480 610 L 830 430 L 700 770 L 640 660 Z"/>
+  </g>
+  <path d="M 830 430 L 640 660 L 650 760 L 700 690" fill="none" stroke="#c2701a" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
