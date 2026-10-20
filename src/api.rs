@@ -260,11 +260,27 @@ pub fn publish_post(project_path: &str, lang: &str, filename: &str, project_conf
         let _ = std::fs::remove_file(&social_src);
     }
 
-    let _ = std::process::Command::new("node")
+    let _ = std::process::Command::new(node_command())
         .arg("scripts/generate-blog-data.js")
         .current_dir(project_path)
         .status();
     Ok(())
+}
+
+/// `node`, or on Windows the per-user copy that setup-windows.ps1 unpacks, when this process
+/// started before that copy was added to PATH (e.g. launched from the installer's last page).
+fn node_command() -> std::path::PathBuf {
+    #[cfg(windows)]
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        let user_node = std::path::Path::new(&local).join(r"Programs\nodejs\node.exe");
+        let on_path = std::process::Command::new("node").arg("--version")
+            .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+            .status().is_ok();
+        if !on_path && user_node.exists() {
+            return user_node;
+        }
+    }
+    "node".into()
 }
 
 pub fn delete_queued(project_path: &str, lang: &str, filename: &str, project_config: &ProjectConfig) -> Result<()> {
