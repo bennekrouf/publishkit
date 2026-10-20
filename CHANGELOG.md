@@ -22,6 +22,13 @@ user sees in the update prompt should all be accounted for.
 - A Feedback button in the top bar opens the contact form with PublishKit and
   your version already filled in, so an idea or a problem reaches us in two
   clicks.
+### Changed
+
+- The Windows installer no longer asks for administrator rights. PublishKit now
+  installs for your account only, in your user folder, and Node.js is set up
+  the same way, so you can install on a work PC without an admin password. The
+  installer still offers an install for all users, and an existing all-users
+  install is updated in place.
 
 ## [0.1.15] - 2026-10-19
 

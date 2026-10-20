@@ -27,7 +27,12 @@ OutputBaseFilename=publishkit-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=admin
+; Per-user install by default (no UAC prompt): {autopf} resolves to
+; %LOCALAPPDATA%\Programs. The dialog still offers an all-users install, and
+; UsePreviousPrivileges (default yes) keeps upgrades of an earlier machine-wide
+; install in Program Files instead of creating a second copy.
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Windows 10 1809+ required for WebView2
@@ -70,7 +75,7 @@ Source: "..\assets\icon.ico";                   DestDir: "{app}"; Flags: ignorev
 [Icons]
 Name: "{group}\{#MyAppName}";           Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#MyAppName}";   Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}";   Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "powershell.exe"; \
