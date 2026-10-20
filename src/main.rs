@@ -1,4 +1,5 @@
 mod api;
+mod feedback;
 mod mcp;
 mod state;
 mod screens;

@@ -225,6 +225,14 @@ fn MainLayout(
                     onclick: move |_| show_mcp.set(true),
                     "MCP"
                 }
+                // A link, not a button: the webview hands it to the browser.
+                a {
+                    class: "btn-small",
+                    href: "{crate::feedback::contact_url()}",
+                    target: "_blank",
+                    title: "Ideas, bugs, questions: send them to the person who makes PublishKit",
+                    "Feedback"
+                }
                 // gear icon button
                 button {
                     class: "btn-icon",

@@ -243,6 +243,7 @@ input:focus, textarea:focus { border-color: var(--blue); background: var(--bg0);
   border: 1px solid var(--border); border-radius: 5px; font-size: 12px;
   cursor: pointer; transition: background .12s, border-color .12s;
 }
+a.btn-small { text-decoration: none; }
 .btn-small:hover { color: var(--text1); border-color: var(--text2); background: var(--bg3); }
 .btn-small.btn-danger { color: var(--red); }
 .btn-small.btn-danger:hover { background: var(--red-bg); color: #fff; border-color: var(--red-bg); }
