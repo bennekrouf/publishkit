@@ -17,6 +17,11 @@ user sees in the update prompt should all be accounted for.
 
 ## [Unreleased]
 
+### Added
+
+- A Feedback button in the top bar opens the contact form with PublishKit and
+  your version already filled in, so an idea or a problem reaches us in two
+  clicks.
 ### Changed
 
 - The Windows installer no longer asks for administrator rights. PublishKit now
