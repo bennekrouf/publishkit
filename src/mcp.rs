@@ -6,8 +6,8 @@
 //! project's markdown files, which the app may have open too; it reloads its lists when they
 //! change (see the watcher in `MainLayout`).
 //!
-//! Claude usually writes a post itself; the app's own model (DeepSeek or Claude, set in its
-//! Settings) is only called when a tool is asked to generate.
+//! The client usually writes a post itself; the app's own model (api0, in the region set in
+//! its Settings) is only called when a tool is asked to generate.
 
 use crate::api;
 use crate::frontmatter;
@@ -435,10 +435,7 @@ fn project_info(args: &Value) -> Result<Value, String> {
         "title_heading": cfg.title_heading,
         "publish_command": cfg.publish_command,
         "languages": counts,
-        "model": match app.provider.region() {
-            Some(r) => r.display.to_string(),
-            None => format!("{} ({})", app.provider.label(), app.provider.model()),
-        },
+        "model": app.provider.label(),
         "model_key_set": !app.resolved_api_key().is_empty(),
     }))
 }
