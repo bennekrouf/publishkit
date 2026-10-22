@@ -415,7 +415,7 @@ pub fn PostEditor(
                                 let cfg = config.peek().clone();
                                 let key = cfg.resolved_api_key();
                                 if key.is_empty() {
-                                    status.set("No API key configured — open ⚙ Settings.".to_string());
+                                    status.set(cfg.missing_key());
                                     return;
                                 }
                                 let project = project();
