@@ -1,7 +1,7 @@
 # Changelog
 
 What changed in each release of **PublishKit**, the desktop app for writing,
-queuing and publishing blog posts with DeepSeek or Claude.
+queuing and publishing blog posts.
 
 The public version of this page — with the download for each release — lives at
 <https://mayorana.ch/en/apps/publishkit/releases>. It is generated from this
@@ -14,6 +14,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
+
+## [Unreleased]
+
+### Removed
+
+- DeepSeek and Claude with your own key are gone from Settings: the model is
+  api0, in Europe, China or the United States. A config saved with one of
+  them opens on api0 · Europe, with its sites and accounts kept.
 
 ## [0.1.18] - 2026-10-22
 

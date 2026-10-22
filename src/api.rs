@@ -100,15 +100,8 @@ pub async fn generate_post(
     call(provider, &system, &user, api_key).await
 }
 
+/// api0's OpenAI-compatible chat endpoint, in the region set in Settings.
 async fn call(provider: &LlmProvider, system: &str, user: &str, api_key: &str) -> Result<String> {
-    match provider {
-        LlmProvider::Claude => call_claude(system, user, api_key).await,
-        LlmProvider::DeepSeek | LlmProvider::Api0 { .. } => call_chat(provider, system, user, api_key).await,
-    }
-}
-
-/// An OpenAI-compatible chat endpoint: DeepSeek's, or api0's.
-async fn call_chat(provider: &LlmProvider, system: &str, user: &str, api_key: &str) -> Result<String> {
     let name = provider.label();
     let client = reqwest::Client::new();
     let body = serde_json::json!({
@@ -120,15 +113,13 @@ async fn call_chat(provider: &LlmProvider, system: &str, user: &str, api_key: &s
         "temperature": 0.75
     });
 
-    let mut req = client
+    let resp = client
         .post(provider.api_url())
         .header("Authorization", format!("Bearer {api_key}"))
-        .header("Content-Type", "application/json");
-    if provider.region().is_some() {
+        .header("Content-Type", "application/json")
         // So api0 puts the credits down to PublishKit.
-        req = req.header("X-Client-App", crate::api0::PRODUCT);
-    }
-    let resp = req.json(&body).send().await.with_context(|| format!("{name} request failed"))?;
+        .header("X-Client-App", crate::api0::PRODUCT)
+        .json(&body).send().await.with_context(|| format!("{name} request failed"))?;
 
     if !resp.status().is_success() {
         let s = resp.status();
@@ -140,35 +131,6 @@ async fn call_chat(provider: &LlmProvider, system: &str, user: &str, api_key: &s
     json["choices"][0]["message"]["content"]
         .as_str().map(String::from)
         .with_context(|| format!("Empty {name} response"))
-}
-
-async fn call_claude(system: &str, user: &str, api_key: &str) -> Result<String> {
-    let client = reqwest::Client::new();
-    let body = serde_json::json!({
-        "model": LlmProvider::Claude.model(),
-        "max_tokens": 2048,
-        "system": system,
-        "messages": [{"role": "user", "content": user}]
-    });
-
-    let resp = client
-        .post(LlmProvider::Claude.api_url())
-        .header("x-api-key", api_key)
-        .header("anthropic-version", "2023-06-01")
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send().await.context("Claude request failed")?;
-
-    if !resp.status().is_success() {
-        let s = resp.status();
-        let e = resp.text().await.unwrap_or_default();
-        return Err(anyhow::anyhow!("Claude error {s}: {e}"));
-    }
-
-    let json: serde_json::Value = resp.json().await.context("Claude parse failed")?;
-    json["content"][0]["text"]
-        .as_str().map(String::from)
-        .context("Empty Claude response")
 }
 
 pub async fn generate_social_posts(

@@ -1,6 +1,6 @@
 # PublishKit
 
-Desktop app for writing, queuing, and publishing blog posts — powered by DeepSeek or Claude.
+Desktop app for writing, queuing, and publishing blog posts — powered by api0, in Europe, China or the United States.
 
 Built with [Dioxus](https://dioxuslabs.com/) (Rust, runs natively on macOS, Linux, Windows).
 
@@ -120,12 +120,13 @@ reloads its lists when something changed.
 
 Click the **⚙** gear icon in the top bar to open Settings.
 
-| Provider | Model | Key env fallback |
-|---|---|---|
-| DeepSeek | `deepseek-chat` | `DEEPSEEK_API_KEY` |
-| Claude | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
+The model is **api0**, in one of three regions — **Europe**, **China** or the **United States**,
+one click each. Which model runs in a region is api0's choice; each region shows about how many
+credits a post costs.
 
-You can paste the key directly in Settings (stored in `~/.config/publishkit/config.json`) or leave the field empty and set the environment variable instead. The app checks the env var automatically if no key is saved.
+api0 is paid with the AI credits of the Mayorana licence every Mayorana app on this computer
+shares, so a licence pasted in GitAgent or JobScout works here with no key to set up. A licence
+number in the `API0_API_KEY` environment variable is read first.
 
 ---
 
@@ -195,7 +196,7 @@ failed (the post, or the site's publish command), 2 if there is no site.
 
 ```bash
 cd publishkit
-DEEPSEEK_API_KEY=sk-... dx serve --platform desktop
+dx serve --platform desktop
 ```
 
 ### Build release binary

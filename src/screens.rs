@@ -488,8 +488,6 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
 
     let mut selected_provider = use_signal(|| cfg.provider.clone());
     let mut accounts = use_signal(|| cfg.crosspost.clone());
-    let mut api_key_input = use_signal(|| cfg.api_key.clone().unwrap_or_default());
-    let mut show_key = use_signal(|| false);
     let mut saved_msg = use_signal(|| String::new());
     // What each api0 region costs, asked once when Settings opens.
     let mut offers = use_signal(|| Option::<Result<Vec<crate::api0::RegionOffer>, String>>::None);
@@ -562,7 +560,7 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
             }
 
             div { class: "modal-body",
-                // The model: api0's regions, one click each, or a provider with a key of one's own.
+                // The model: api0's regions, one click each.
                 div { class: "settings-field",
                     label { "Model" }
                     div { class: "region-row",
@@ -576,22 +574,6 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
                                 span { class: "region-label", "{r.label}" }
                                 span { class: "region-note", "{note}" }
                             }
-                        }
-                    }
-                    div { class: "provider-selector",
-                        button {
-                            class: if *selected_provider.read() == LlmProvider::DeepSeek
-                                { "provider-btn active" } else { "provider-btn" },
-                            onclick: move |_| *selected_provider.write() = LlmProvider::DeepSeek,
-                            div { class: "provider-btn-name", "DeepSeek" }
-                            div { class: "provider-btn-model", "deepseek-chat, your key" }
-                        }
-                        button {
-                            class: if *selected_provider.read() == LlmProvider::Claude
-                                { "provider-btn active" } else { "provider-btn" },
-                            onclick: move |_| *selected_provider.write() = LlmProvider::Claude,
-                            div { class: "provider-btn-name", "Claude" }
-                            div { class: "provider-btn-model", "claude-sonnet-4-6, your key" }
                         }
                     }
                 }
@@ -615,46 +597,6 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
                             p { class: "settings-hint", "{e}" }
                         }
                     }
-                } else {
-                // API key
-                div { class: "settings-field",
-                    label {
-                        {match *selected_provider.read() {
-                            LlmProvider::Claude => "Anthropic API Key",
-                            _ => "DeepSeek API Key",
-                        }}
-                    }
-                    div { class: "key-input-row",
-                        input {
-                            r#type: if *show_key.read() { "text" } else { "password" },
-                            placeholder: match *selected_provider.read() {
-                                LlmProvider::Claude => "sk-ant-...",
-                                _ => "sk-...",
-                            },
-                            value: "{api_key_input}",
-                            oninput: move |e| *api_key_input.write() = e.value(),
-                        }
-                        button {
-                            class: "btn-icon btn-toggle-key",
-                            title: if *show_key.read() { "Hide" } else { "Show" },
-                            onclick: move |_| {
-                                let v = *show_key.read();
-                                *show_key.write() = !v;
-                            },
-                            if *show_key.read() { "🙈" } else { "👁" }
-                        }
-                    }
-                    p { class: "settings-hint",
-                        "Leave empty to use the "
-                        code {
-                            {match *selected_provider.read() {
-                                LlmProvider::Claude => "ANTHROPIC_API_KEY",
-                                _ => "DEEPSEEK_API_KEY",
-                            }}
-                        }
-                        " environment variable."
-                    }
-                }
                 }
 
                 h3 { class: "settings-section", "This site" }
@@ -861,8 +803,6 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
                     onclick: move |_| {
                         let mut cfg = config.write();
                         cfg.provider = selected_provider.read().clone();
-                        let key = api_key_input.read().trim().to_string();
-                        cfg.api_key = if key.is_empty() { None } else { Some(key) };
                         cfg.crosspost = accounts.read().clone();
                         cfg.save();
                         drop(cfg);

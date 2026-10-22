@@ -417,20 +417,7 @@ select:focus { border-color: var(--blue); }
   word-break: break-word;
 }
 
-/* ── Provider selector ───────────── */
-.provider-selector { display: flex; gap: 10px; }
-.provider-btn {
-  font-family: inherit;
-  flex: 1; padding: 11px 13px; background: var(--bg2);
-  border: 2px solid var(--border); border-radius: 6px; cursor: pointer;
-  text-align: left; transition: border-color .15s, background .15s;
-}
-.provider-btn:hover { border-color: var(--blue); }
-.provider-btn.active { border-color: var(--blue); background: var(--blue-dark); }
-.provider-btn-name { font-size: 13px; font-weight: 700; color: var(--text1); margin-bottom: 2px; }
-.provider-btn-model { font-size: 11px; color: var(--text3); font-family: var(--mono); }
-
-/* api0's regions, one click each, above the providers with a key of one's own. */
+/* api0's regions, one click each. */
 .region-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
 .region {
   font-family: inherit;
@@ -447,9 +434,6 @@ select:focus { border-color: var(--blue); }
 .region.active .region-note { color: var(--blue); }
 
 /* ── API key row ─────────────────── */
-.key-input-row { display: flex; gap: 6px; align-items: center; }
-.key-input-row input { flex: 1; }
-.btn-toggle-key { font-size: 13px; flex-shrink: 0; }
 
 /* ── Social posts section ────────── */
 .social-section {
