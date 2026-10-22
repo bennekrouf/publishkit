@@ -15,6 +15,109 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- PublishKit now works with sites built with Hugo, Jekyll, Astro, Eleventy, Zola,
+  Docusaurus or Next.js, or with any folder of markdown posts, not just the
+  `content/{lang}/queue` and `content/{lang}/blog` layout. Open the site's
+  folder and PublishKit finds its posts and how it marks a draft (`draft:
+  true`, or Jekyll's `_drafts` folder). New posts are written the way that site
+  writes them.
+- Any number of languages: every language folder of the site gets its own tab,
+  and the model writes in that language. A site in one language shows no tabs.
+- Settings has a **This site** section: what the site is built with, its name,
+  address, author, default tags, writing brief, the address of a post (used in
+  the social teasers), and a command to run after each publish.
+- Posts written in TOML (`+++`) front matter are read and published.
+- Editing a post shows its title, description, date and tags as fields of
+  their own above the text, with its word count and reading time. Only the
+  fields you change are rewritten in the file.
+- Posts save themselves a moment after you stop typing, and the post you were
+  on is saved when you open another.
+- Add images to a post with **Image…** or by dropping them on the text: they
+  are copied into the site's images folder (set in Settings) and linked where
+  the cursor is.
+- Translate a post into the site's other languages with the **→ FR** (and so
+  on) buttons in the editor: the translation is saved as a draft under the
+  same file name in that language.
+- Search the post list by words in the title, description, tags or text, and
+  filter it by tag.
+- A **Board** tab shows drafts by stage — ideas, drafts, in review — next to
+  what is scheduled and what went out last. Add an idea with just a title and
+  move cards along as the writing goes.
+- A **Calendar** tab shows each month's published posts on their date and
+  scheduled drafts on the day they go out. Click any post to edit it.
+- Schedule a draft: pick its stage and a **Publish on** date and time in the
+  editor, and PublishKit publishes it then while its window is open. For when
+  it isn't, `publishkit publish-due` does the same from cron or launchd.
+- Claude can set a draft's stage and publishing time too, and sees them when
+  it lists posts.
+- Checks before publishing, listed in the editor as you write. Problems — no
+  title or text, a TODO or lorem ipsum left in, an image that isn't in the
+  site — hold Publish back until you fix them or publish anyway, and a
+  scheduled draft with problems is unscheduled rather than sent out. Warnings
+  point at titles and descriptions too long for search results, missing
+  descriptions or tags, headings that skip a level and images without alt
+  text. **Check links** reports links to other sites that no longer work.
+- A **Deploy** button runs the command that puts your site online, set in
+  Settings, and can run it after each publish too.
+- Send a published post to dev.to, Hashnode, a WordPress or a Ghost blog from
+  its editor, with your site's address as the original so search engines
+  credit it. Copies go as drafts unless you choose otherwise, and sending
+  again updates the same copy. Claude can cross-post too, when you ask.
+- Posts kept as page bundles — a folder per post, holding `index.md` and its
+  images, as Hugo and Astro sites often do — are listed and edited like any
+  other, and publishing or deleting one moves or removes its whole folder.
+  On such a site new posts are bundles too, and images you add go into the
+  post's own folder.
+- Widen the post list by dragging its right edge; double-click the edge to
+  put it back. As it widens, titles grow, the Publish buttons move beside
+  them and each post shows a line or two of its description.
+- The preview shows the post's own images — those in the site's images
+  folder or beside the post — instead of empty boxes.
+- A formatting bar above the text — bold, italic, link, headings, list,
+  quote, code — with ⌘B, ⌘I and ⌘K, and images can be pasted straight from
+  the clipboard.
+- Post a post's short teaser on Bluesky or Mastodon from its preview, with
+  your account set up in Settings.
+- Hugo and Zola sites that mark the language in the file name (`post.fr.md`)
+  get a tab per language, and translating a post writes its counterpart
+  under the right name.
+- Switch between your sites from the menu at the top left, which remembers
+  every site you open; the start screen lists them as well. Scheduled posts
+  go out for all of them while PublishKit is open, and
+  `publishkit publish-due --all` does the same from cron or launchd.
+
+### Changed
+
+- Publishing only changes the lines it needs (status, draft mark, date) and
+  keeps everything else in the post's front matter as it was, comments
+  included.
+- The command run after publishing is shown in Settings and can be changed or
+  removed. If it fails, you now see its error instead of nothing; the post
+  stays published.
+- A site opened for the first time gets neutral settings named after its
+  folder, instead of another site's name, tags and writing brief.
+- Posts are listed newest first.
+- The language picker in the new-post form is no longer squeezed.
+- The window and top bar are now called PublishKit, and the top bar shows what
+  the site is built with.
+- The site menu replaces the **Change folder** button.
+
+### Fixed
+
+- The new-post form starts empty, instead of showing the title and summary
+  of the last post you opened.
+- The posts of the site you had open are listed as soon as PublishKit starts,
+  instead of only after you press refresh.
+- Saving a published post in the editor saves it where it is, instead of
+  creating a copy among the drafts.
+- A new post with the same title as an existing draft gets a file of its own
+  instead of replacing it.
+- Descriptions written over several lines in the front matter show correctly.
+
 ## [0.1.16] - 2026-10-20
 
 ### Added
