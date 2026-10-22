@@ -106,22 +106,41 @@ pub enum LlmProvider {
     #[default]
     DeepSeek,
     Claude,
+    /// api0 in one of its AI regions, on the shared licence's credits.
+    Api0 { region: String },
 }
 
 impl LlmProvider {
     pub fn label(&self) -> &'static str {
-        match self { LlmProvider::DeepSeek => "DeepSeek", LlmProvider::Claude => "Claude" }
+        match self {
+            LlmProvider::DeepSeek => "DeepSeek",
+            LlmProvider::Claude => "Claude",
+            LlmProvider::Api0 { region } => crate::api0::region(region).map_or("api0", |r| r.display),
+        }
     }
-    pub fn model(&self) -> &'static str {
+    pub fn model(&self) -> &str {
         match self {
             LlmProvider::DeepSeek => "deepseek-chat",
             LlmProvider::Claude   => "claude-sonnet-4-6",
+            LlmProvider::Api0 { region } => region,
         }
     }
-    pub fn api_url(&self) -> &'static str {
+    pub fn api_url(&self) -> String {
         match self {
-            LlmProvider::DeepSeek => "https://api.deepseek.com/chat/completions",
-            LlmProvider::Claude   => "https://api.anthropic.com/v1/messages",
+            LlmProvider::DeepSeek => "https://api.deepseek.com/chat/completions".into(),
+            LlmProvider::Claude   => "https://api.anthropic.com/v1/messages".into(),
+            LlmProvider::Api0 { .. } => format!("{}/chat/completions", crate::api0::BASE_URL),
+        }
+    }
+    /// One click in Settings: api0, in this region.
+    pub fn api0(region: &str) -> Self {
+        LlmProvider::Api0 { region: region.to_string() }
+    }
+    /// The api0 region this is set to, if any.
+    pub fn region(&self) -> Option<&'static crate::api0::Region> {
+        match self {
+            LlmProvider::Api0 { region } => crate::api0::region(region),
+            _ => None,
         }
     }
 }
@@ -213,7 +232,20 @@ impl AppConfig {
         sites
     }
 
+    /// What to say when [`Self::resolved_api_key`] is empty.
+    pub fn missing_key(&self) -> String {
+        match self.provider {
+            LlmProvider::Api0 { .. } => "api0 needs a licence: paste one in any Mayorana app, \
+                                         or set API0_API_KEY".to_string(),
+            _ => "No API key configured — open ⚙ Settings.".to_string(),
+        }
+    }
+
     pub fn resolved_api_key(&self) -> String {
+        // api0 takes the licence, never the key typed for another provider.
+        if matches!(self.provider, LlmProvider::Api0 { .. }) {
+            return crate::api0::licence().unwrap_or_default();
+        }
         if let Some(k) = &self.api_key {
             if !k.is_empty() { return k.clone(); }
         }
@@ -221,6 +253,7 @@ impl AppConfig {
         match self.provider {
             LlmProvider::DeepSeek => std::env::var("DEEPSEEK_API_KEY").unwrap_or_default(),
             LlmProvider::Claude   => std::env::var("ANTHROPIC_API_KEY").unwrap_or_default(),
+            LlmProvider::Api0 { .. } => unreachable!("answered above"),
         }
     }
 }
@@ -1052,6 +1085,19 @@ fn parse_post(path: PathBuf, filename: String, lang: &str, in_queue: bool, draft
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_region_is_saved_and_read_back_beside_the_old_providers() {
+        let mut cfg = AppConfig { provider: LlmProvider::api0("china"), ..AppConfig::default() };
+        let back: AppConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(back.provider.region().map(|r| r.id), Some("china"));
+        assert_eq!(back.provider.label(), "api0 · China");
+        assert_eq!(back.provider.model(), "china");
+        // A config saved before api0 still reads.
+        cfg = serde_json::from_str(r#"{"project_path":null,"provider":"Claude","api_key":"k"}"#).unwrap();
+        assert_eq!(cfg.provider, LlmProvider::Claude);
+        assert_eq!(cfg.provider.region(), None);
+    }
 
     fn site(files: &[(&str, &str)]) -> PathBuf {
         // A folder of its own per test: tests run in parallel, and a clock can repeat.

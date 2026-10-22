@@ -430,6 +430,22 @@ select:focus { border-color: var(--blue); }
 .provider-btn-name { font-size: 13px; font-weight: 700; color: var(--text1); margin-bottom: 2px; }
 .provider-btn-model { font-size: 11px; color: var(--text3); font-family: var(--mono); }
 
+/* api0's regions, one click each, above the providers with a key of one's own. */
+.region-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+.region {
+  font-family: inherit;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 6px; background: var(--bg2); color: var(--text2);
+  border: 2px solid var(--border); border-radius: 6px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.region:hover { border-color: var(--blue); }
+.region.active { border-color: var(--blue); background: var(--blue-dark); color: var(--text1); }
+.region-flag { width: 30px; height: 20px; border-radius: 2px; }
+.region-label { font-size: 13px; font-weight: 700; color: var(--text1); }
+.region-note { font-size: 11px; color: var(--text3); font-family: var(--mono); text-align: center; }
+.region.active .region-note { color: var(--blue); }
+
 /* ── API key row ─────────────────── */
 .key-input-row { display: flex; gap: 6px; align-items: center; }
 .key-input-row input { flex: 1; }

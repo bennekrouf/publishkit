@@ -15,6 +15,17 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- Settings offers api0 as the model, in one of three places: Europe, China
+  or the United States, each one click with its flag. It runs on the AI
+  credits of the licence every Mayorana app on this computer shares, so a
+  licence pasted in GitAgent or JobScout works here with no API key to set
+  up. Each region shows about how many credits a post costs. DeepSeek and
+  Claude with your own key are still one click away.
+
 ## [0.1.17] - 2026-10-22
 
 ### Added

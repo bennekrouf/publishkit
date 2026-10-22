@@ -29,10 +29,7 @@ pub async fn generate_linkedin_post(
         Output ONLY the post text, ready to publish (no markdown headers, no frontmatter)."
     );
 
-    match provider {
-        LlmProvider::DeepSeek => call_deepseek(&system, &user, api_key).await,
-        LlmProvider::Claude   => call_claude(&system, &user, api_key).await,
-    }
+    call(provider, &system, &user, api_key).await
 }
 
 pub fn save_linkedin_to_queue(
@@ -100,16 +97,22 @@ pub async fn generate_post(
         Structure: intro, 3-4 sections with ## headings, a conclusion. Aim for ~600-800 words."
     );
 
+    call(provider, &system, &user, api_key).await
+}
+
+async fn call(provider: &LlmProvider, system: &str, user: &str, api_key: &str) -> Result<String> {
     match provider {
-        LlmProvider::DeepSeek => call_deepseek(&system, &user, api_key).await,
-        LlmProvider::Claude   => call_claude(&system, &user, api_key).await,
+        LlmProvider::Claude => call_claude(system, user, api_key).await,
+        LlmProvider::DeepSeek | LlmProvider::Api0 { .. } => call_chat(provider, system, user, api_key).await,
     }
 }
 
-async fn call_deepseek(system: &str, user: &str, api_key: &str) -> Result<String> {
+/// An OpenAI-compatible chat endpoint: DeepSeek's, or api0's.
+async fn call_chat(provider: &LlmProvider, system: &str, user: &str, api_key: &str) -> Result<String> {
+    let name = provider.label();
     let client = reqwest::Client::new();
     let body = serde_json::json!({
-        "model": LlmProvider::DeepSeek.model(),
+        "model": provider.model(),
         "messages": [
             {"role": "system", "content": system},
             {"role": "user",   "content": user}
@@ -117,23 +120,26 @@ async fn call_deepseek(system: &str, user: &str, api_key: &str) -> Result<String
         "temperature": 0.75
     });
 
-    let resp = client
-        .post(LlmProvider::DeepSeek.api_url())
+    let mut req = client
+        .post(provider.api_url())
         .header("Authorization", format!("Bearer {api_key}"))
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send().await.context("DeepSeek request failed")?;
+        .header("Content-Type", "application/json");
+    if provider.region().is_some() {
+        // So api0 puts the credits down to PublishKit.
+        req = req.header("X-Client-App", crate::api0::PRODUCT);
+    }
+    let resp = req.json(&body).send().await.with_context(|| format!("{name} request failed"))?;
 
     if !resp.status().is_success() {
         let s = resp.status();
         let e = resp.text().await.unwrap_or_default();
-        return Err(anyhow::anyhow!("DeepSeek error {s}: {e}"));
+        return Err(anyhow::anyhow!("{name} error {s}: {e}"));
     }
 
-    let json: serde_json::Value = resp.json().await.context("DeepSeek parse failed")?;
+    let json: serde_json::Value = resp.json().await.with_context(|| format!("{name} parse failed"))?;
     json["choices"][0]["message"]["content"]
         .as_str().map(String::from)
-        .context("Empty DeepSeek response")
+        .with_context(|| format!("Empty {name} response"))
 }
 
 async fn call_claude(system: &str, user: &str, api_key: &str) -> Result<String> {
@@ -191,10 +197,7 @@ pub async fn generate_social_posts(
         Twitter/X: max 250 chars (leave room for the URL), punchy, include the URL."
     );
 
-    let raw = match provider {
-        LlmProvider::DeepSeek => call_deepseek(&system, &user, api_key).await?,
-        LlmProvider::Claude   => call_claude(&system, &user, api_key).await?,
-    };
+    let raw = call(provider, &system, &user, api_key).await?;
 
     // Extract JSON from response (handle potential markdown fences)
     let json_str = raw.trim()
@@ -585,12 +588,7 @@ pub async fn translate_post(
     );
     let ask = |user: String| {
         let system = system.clone();
-        async move {
-            match provider {
-                LlmProvider::DeepSeek => call_deepseek(&system, &user, api_key).await,
-                LlmProvider::Claude   => call_claude(&system, &user, api_key).await,
-            }
-        }
+        async move { call(provider, &system, &user, api_key).await }
     };
     let (body, meta) = tokio::join!(ask(body_prompt), ask(meta_prompt));
     let body = body?;

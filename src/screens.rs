@@ -491,6 +491,35 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
     let mut api_key_input = use_signal(|| cfg.api_key.clone().unwrap_or_default());
     let mut show_key = use_signal(|| false);
     let mut saved_msg = use_signal(|| String::new());
+    // What each api0 region costs, asked once when Settings opens.
+    let mut offers = use_signal(|| Option::<Result<Vec<crate::api0::RegionOffer>, String>>::None);
+    use_future(move || async move {
+        offers.set(Some(crate::api0::regions().await));
+    });
+    let has_licence = crate::api0::licence().is_some();
+    let region_notes: Vec<(&'static crate::api0::Region, String)> = crate::api0::REGIONS
+        .iter()
+        .map(|r| {
+            let note = match offers.read().as_ref() {
+                _ if !has_licence => "needs a licence".to_string(),
+                None => "\u{2026}".to_string(),
+                Some(Err(_)) => "unavailable".to_string(),
+                Some(Ok(list)) => match list.iter().find(|o| o.id == r.id) {
+                    Some(o) => {
+                        let n = o.credits_per_post();
+                        format!("\u{2248} {n} {} a post", if n == 1 { "credit" } else { "credits" })
+                    }
+                    None => "not offered".to_string(),
+                },
+            };
+            (r, note)
+        })
+        .collect();
+    let region = selected_provider.read().region();
+    let offers_error = match offers.read().as_ref() {
+        Some(Err(e)) if has_licence => Some(e.clone()),
+        _ => None,
+    };
 
     // This site's settings, kept in its publishkit.yaml.
     let project = cfg.project_path.clone().unwrap_or_default();
@@ -533,41 +562,74 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
             }
 
             div { class: "modal-body",
-                // LLM provider
+                // The model: api0's regions, one click each, or a provider with a key of one's own.
                 div { class: "settings-field",
-                    label { "LLM Provider" }
+                    label { "Model" }
+                    div { class: "region-row",
+                        for (r, note) in region_notes {
+                            button {
+                                key: "{r.id}",
+                                class: if region == Some(r) { "region active" } else { "region" },
+                                title: "api0, in {r.label}",
+                                onclick: move |_| *selected_provider.write() = LlmProvider::api0(r.id),
+                                crate::api0::RegionFlag { id: r.id }
+                                span { class: "region-label", "{r.label}" }
+                                span { class: "region-note", "{note}" }
+                            }
+                        }
+                    }
                     div { class: "provider-selector",
                         button {
                             class: if *selected_provider.read() == LlmProvider::DeepSeek
                                 { "provider-btn active" } else { "provider-btn" },
                             onclick: move |_| *selected_provider.write() = LlmProvider::DeepSeek,
                             div { class: "provider-btn-name", "DeepSeek" }
-                            div { class: "provider-btn-model", "deepseek-chat" }
+                            div { class: "provider-btn-model", "deepseek-chat, your key" }
                         }
                         button {
                             class: if *selected_provider.read() == LlmProvider::Claude
                                 { "provider-btn active" } else { "provider-btn" },
                             onclick: move |_| *selected_provider.write() = LlmProvider::Claude,
                             div { class: "provider-btn-name", "Claude" }
-                            div { class: "provider-btn-model", "claude-sonnet-4-6" }
+                            div { class: "provider-btn-model", "claude-sonnet-4-6, your key" }
                         }
                     }
                 }
 
+                if let Some(r) = region {
+                    div { class: "settings-field",
+                        p { class: "settings-hint",
+                            if has_licence {
+                                "api0 runs the model in {r.label} and takes AI credits from the licence \
+                                 shared by every Mayorana app on this computer, with no key to set up. \
+                                 Which model runs there is api0's choice. A post is about \
+                                 {crate::api0::TYPICAL_POST_TOKENS} tokens; a translation is two calls."
+                            } else {
+                                "api0 needs a licence. Paste your licence number in any Mayorana app \
+                                 (GitAgent, JobScout…) and PublishKit uses it too, or set the "
+                                code { "{crate::api0::KEY_ENV}" }
+                                " environment variable."
+                            }
+                        }
+                        if let Some(e) = offers_error {
+                            p { class: "settings-hint", "{e}" }
+                        }
+                    }
+                } else {
                 // API key
                 div { class: "settings-field",
                     label {
                         {match *selected_provider.read() {
-                            LlmProvider::DeepSeek => "DeepSeek API Key",
-                            LlmProvider::Claude   => "Anthropic API Key",
+                            LlmProvider::Claude => "Anthropic API Key",
+                            _ => "DeepSeek API Key",
                         }}
                     }
                     div { class: "key-input-row",
                         input {
                             r#type: if *show_key.read() { "text" } else { "password" },
                             placeholder: match *selected_provider.read() {
-                                LlmProvider::DeepSeek => "sk-...",
-                                LlmProvider::Claude   => "sk-ant-...",
+                                LlmProvider::Claude => "sk-ant-...",
+                                _ => "sk-...",
                             },
                             value: "{api_key_input}",
                             oninput: move |e| *api_key_input.write() = e.value(),
@@ -586,12 +648,13 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
                         "Leave empty to use the "
                         code {
                             {match *selected_provider.read() {
-                                LlmProvider::DeepSeek => "DEEPSEEK_API_KEY",
-                                LlmProvider::Claude   => "ANTHROPIC_API_KEY",
+                                LlmProvider::Claude => "ANTHROPIC_API_KEY",
+                                _ => "DEEPSEEK_API_KEY",
                             }}
                         }
                         " environment variable."
                     }
+                }
                 }
 
                 h3 { class: "settings-section", "This site" }
@@ -1218,7 +1281,7 @@ fn CenterPanel(
                             let api_key = cfg.resolved_api_key();
 
                             if api_key.is_empty() {
-                                *status_msg.write() = "No API key configured — open ⚙ Settings.".to_string();
+                                *status_msg.write() = cfg.missing_key();
                                 return;
                             }
 
@@ -1547,7 +1610,7 @@ fn LinkedInCenterPanel(
                         let api_key = cfg.resolved_api_key();
 
                         if api_key.is_empty() {
-                            *status_msg.write() = "No API key configured — open ⚙ Settings.".to_string();
+                            *status_msg.write() = cfg.missing_key();
                             return;
                         }
 

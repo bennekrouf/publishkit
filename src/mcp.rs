@@ -366,8 +366,8 @@ fn model() -> Result<(AppConfig, String), String> {
     let key = cfg.resolved_api_key();
     if key.is_empty() {
         return Err(format!(
-            "PublishKit has no {} key: set one in its Settings, or write the text yourself and pass it instead",
-            cfg.provider.label()
+            "{}. Or write the text yourself and pass it instead",
+            cfg.missing_key().trim_end_matches('.')
         ));
     }
     Ok((cfg, key))
@@ -435,7 +435,10 @@ fn project_info(args: &Value) -> Result<Value, String> {
         "title_heading": cfg.title_heading,
         "publish_command": cfg.publish_command,
         "languages": counts,
-        "model": format!("{} ({})", app.provider.label(), app.provider.model()),
+        "model": match app.provider.region() {
+            Some(r) => r.display.to_string(),
+            None => format!("{} ({})", app.provider.label(), app.provider.model()),
+        },
         "model_key_set": !app.resolved_api_key().is_empty(),
     }))
 }
