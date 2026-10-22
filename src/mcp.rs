@@ -10,6 +10,8 @@
 //! Settings) is only called when a tool is asked to generate.
 
 use crate::api;
+use crate::frontmatter;
+use crate::plan::{self, Stage};
 use crate::state::{AppConfig, LinkedInPost, Post, ProjectConfig, SocialPosts, load_posts};
 use dioxus::prelude::*;
 use serde_json::{json, Value};
@@ -20,14 +22,15 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 /// own back; everything used here exists in all of them.
 const PROTOCOL: &str = "2025-06-18";
 
-const INSTRUCTIONS: &str = "PublishKit manages a website's blog as markdown files: drafts wait in a queue, \
-per language, until they are published, and LinkedIn posts the same way. Start with project, which gives the \
-site, its languages and how many posts each has; tools default to the project open in PublishKit. list_posts \
-and get_post read posts. queue_post adds a draft: write its body yourself in the site's voice (project gives \
-the site's own writing brief), or pass generate: true to have PublishKit's configured model write it. \
-update_post edits a queued draft; set_social sets the LinkedIn and X teasers of a post. publish_post makes a \
-draft live: it moves into the blog, is dated today, and the site's index is rebuilt, so ask the user before \
-publishing, and before delete_post. queue_linkedin adds a standalone LinkedIn post.";
+const INSTRUCTIONS: &str = "PublishKit manages a website's blog as markdown files: drafts wait, per language, \
+until they are published, and LinkedIn posts the same way. Start with project, which gives the site, the \
+framework it is built with, its languages and how many posts each has; tools default to the project open in \
+PublishKit. list_posts and get_post read posts. queue_post adds a draft: write its body yourself in the site's \
+voice (project gives the site's own writing brief), or pass generate: true to have PublishKit's configured model \
+write it. update_post edits a draft; set_social sets the LinkedIn and X teasers of a post. publish_post makes a \
+draft live: it is dated today and the site's publish command, if it has one, runs, so ask the user before \
+publishing, and before delete_post. schedule_post sets a draft's stage (idea, draft, review) and the date and \
+time it is published by itself; ask the user before scheduling. queue_linkedin adds a standalone LinkedIn post.";
 
 pub fn serve() {
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("tokio runtime");
@@ -107,15 +110,16 @@ fn pretty(value: &Value) -> String {
 fn tools() -> Value {
     let project = json!({ "type": "string", "description": "Absolute path of the site's folder. Defaults to the one open in PublishKit." });
     let lang = json!({ "type": "string", "description": "Language code, e.g. fr or en (project lists them)." });
-    let filename = json!({ "type": "string", "description": "The post's file name, e.g. my-post.md, as list_posts gives it." });
+    let filename = json!({ "type": "string", "description": "The post's file name as list_posts gives it: my-post.md, my-post.mdx, or my-post/index.md for a page bundle." });
     let kind = json!({ "type": "string", "enum": ["blog", "linkedin"], "description": "Default blog." });
     let place = json!({ "type": "string", "enum": ["queue", "published"], "description": "Default queue." });
     json!([
         {
             "name": "project",
             "description": "The site: its name, URL, author, default tags, its writing brief (the system prompt \
-                            PublishKit writes with), its languages, and how many drafts and published posts each \
-                            has, blog and LinkedIn. Also the model PublishKit generates with.",
+                            PublishKit writes with), the framework it is built with, its languages, and how many \
+                            drafts and published posts each has, blog and LinkedIn. Also the model PublishKit \
+                            generates with, and the other sites PublishKit knows (pass one's folder as project).",
             "inputSchema": { "type": "object", "properties": { "project": project } },
         },
         {
@@ -142,8 +146,9 @@ fn tools() -> Value {
         },
         {
             "name": "queue_post",
-            "description": "Adds a blog draft to a language's queue, with the site's author and default tags. The \
-                            file starts with the title as a heading, so don't repeat it in the body. Give body, or \
+            "description": "Adds a blog draft to a language's queue, with the site's author and default tags. When \
+                            project says title_heading, the file starts with the title as a heading, so don't repeat \
+                            it in the body. Give body, or \
                             generate: true to have PublishKit's model write it from the title and summary. social \
                             adds the teasers; generate_social has PublishKit's model write them.",
             "inputSchema": {
@@ -166,7 +171,7 @@ fn tools() -> Value {
         },
         {
             "name": "update_post",
-            "description": "Changes a queued draft (blog or LinkedIn): body replaces what follows the front matter, \
+            "description": "Changes a draft (blog or LinkedIn): body replaces what follows the front matter, \
                             content replaces the whole file (front matter included). Published posts aren't edited here.",
             "inputSchema": {
                 "type": "object",
@@ -195,13 +200,48 @@ fn tools() -> Value {
         },
         {
             "name": "publish_post",
-            "description": "Publishes a queued draft: moves it into the blog (or LinkedIn's published folder), dates it \
-                            today, and for a blog post rebuilds the site's index with its generate-blog-data script. \
-                            Ask the user first.",
+            "description": "Publishes a draft: moves it into the blog (or LinkedIn's published folder), or clears its \
+                            draft mark where drafts sit with published posts, dates it today, and for a blog post \
+                            runs the site's publish command, if it has one. A blog post whose checks find problems \
+                            (no title or text, TODO left in, a missing image) is refused with them; get_post lists \
+                            its checks. Ask the user first.",
             "inputSchema": {
                 "type": "object",
-                "properties": { "project": project, "lang": lang, "filename": filename, "kind": kind },
+                "properties": {
+                    "project": project, "lang": lang, "filename": filename, "kind": kind,
+                    "force": { "type": "boolean", "description": "Publish a blog post although its checks found problems. Only when the user says so." },
+                },
                 "required": ["lang", "filename"],
+            },
+        },
+        {
+            "name": "schedule_post",
+            "description": "Sets a blog draft's stage on PublishKit's board (idea, draft or review) and when it is \
+                            published by itself: publish_at, local time like 2026-11-02T09:00, or an empty string \
+                            to unschedule. PublishKit publishes it then while its window is open, or when \
+                            `publishkit publish-due` runs. Ask the user before scheduling.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project": project, "lang": lang, "filename": filename,
+                    "stage": { "type": "string", "enum": ["idea", "draft", "review"] },
+                    "publish_at": { "type": "string" },
+                },
+                "required": ["lang", "filename"],
+            },
+        },
+        {
+            "name": "crosspost_post",
+            "description": "Sends a published blog post to dev.to, Hashnode, a WordPress or a Ghost blog set up in \
+                            PublishKit's Settings, with the site's address as canonical — or updates the copy sent \
+                            before. Copies go as drafts there unless the user turned that off. Ask the user first.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project": project, "lang": lang, "filename": filename,
+                    "target": { "type": "string", "enum": ["devto", "hashnode", "wordpress", "ghost"] },
+                },
+                "required": ["lang", "filename", "target"],
             },
         },
         {
@@ -243,6 +283,8 @@ async fn call(name: &str, args: &Value) -> Result<Value, String> {
         "set_social" => set_social(args).await,
         "publish_post" => publish(args),
         "delete_post" => delete(args),
+        "schedule_post" => schedule(args),
+        "crosspost_post" => crosspost(args).await,
         "queue_linkedin" => queue_linkedin(args).await,
         _ => Err(format!("no tool {name}")),
     }
@@ -278,11 +320,19 @@ fn language(args: &Value, cfg: &ProjectConfig) -> Result<String, String> {
     Ok(lang)
 }
 
-/// A file name in a posts folder: a plain `.md` name, never a path out of it.
+/// A post's name in its posts folder: a plain `.md` or `.mdx` name, or a page bundle's
+/// `folder/index.md` — never a path out of the folder.
 fn filename(args: &Value) -> Result<String, String> {
     let name = text(args, "filename")?;
-    if name.contains(['/', '\\']) || name.starts_with('.') || !name.ends_with(".md") {
-        return Err(format!("{name} is not a post's file name (like my-post.md)"));
+    let plain = |n: &str| !n.contains(['/', '\\']) && !n.starts_with('.') && (n.ends_with(".md") || n.ends_with(".mdx"));
+    let ok = match name.split_once('/') {
+        Some((folder, file)) => {
+            !folder.is_empty() && !folder.starts_with('.') && !folder.contains(['/', '\\']) && crate::state::is_bundle_index(file) && !file.contains('/')
+        }
+        None => plain(&name),
+    };
+    if !ok {
+        return Err(format!("{name} is not a post's file name (like my-post.md, or my-post/index.md for a bundle)"));
     }
     Ok(name)
 }
@@ -334,6 +384,9 @@ fn post_row(p: &Post) -> Value {
         "description": p.description,
         "date": p.date,
         "status": p.status,
+        "tags": p.tags,
+        "stage": p.is_draft().then(|| p.stage.key()),
+        "publish_at": p.publish_at,
         "words": words(&p.body),
         "has_social": p.social.is_some(),
     })
@@ -350,61 +403,70 @@ fn project_info(args: &Value) -> Result<Value, String> {
     let cfg = ProjectConfig::load(&project);
     let posts = load_posts(&project);
     let mut counts = serde_json::Map::new();
-    for lang in cfg.languages() {
-        let (queue, blog, li_queue, li_published) = match lang.as_str() {
-            "fr" => (posts.queue_fr.len(), posts.published_fr.len(), posts.linkedin_queue_fr.len(), posts.linkedin_published_fr.len()),
-            "en" => (posts.queue_en.len(), posts.published_en.len(), posts.linkedin_queue_en.len(), posts.linkedin_published_en.len()),
-            _ => {
-                let count = |linkedin, published| {
-                    std::fs::read_dir(folder(&project, &cfg, &lang, linkedin, published))
-                        .map(|d| d.filter_map(|e| e.ok()).filter(|e| e.path().extension().is_some_and(|x| x == "md")).count())
-                        .unwrap_or(0)
-                };
-                (count(false, false), count(false, true), count(true, false), count(true, true))
-            }
-        };
+    for lang in &posts.languages {
+        let (blog, linkedin) = (posts.blog(lang), posts.linkedin(lang));
         counts.insert(
-            lang,
-            json!({ "drafts": queue, "published": blog, "linkedin_drafts": li_queue, "linkedin_published": li_published }),
+            lang.clone(),
+            json!({
+                "drafts": blog.queue.len(),
+                "published": blog.published.len(),
+                "linkedin_drafts": linkedin.queue.len(),
+                "linkedin_published": linkedin.published.len(),
+            }),
         );
     }
     let app = AppConfig::load();
+    let other_sites: Vec<Value> = app
+        .sites()
+        .into_iter()
+        .filter(|p| *p != project)
+        .map(|p| json!({ "project": p, "site_name": crate::state::site_label(&p) }))
+        .collect();
     Ok(json!({
         "project": project,
+        "other_sites": other_sites,
         "site_name": cfg.site_name,
         "site_url": cfg.site_url,
         "author": cfg.author,
         "default_tags": cfg.default_tags,
         "writing_brief": cfg.system_prompt,
         "social_teasers": cfg.social_enabled,
+        "framework": cfg.preset.map(|p| p.label()),
+        "title_heading": cfg.title_heading,
+        "publish_command": cfg.publish_command,
         "languages": counts,
         "model": format!("{} ({})", app.provider.label(), app.provider.model()),
         "model_key_set": !app.resolved_api_key().is_empty(),
     }))
 }
 
-/// Posts of every kind and place in one language, as `load_posts` reads them for fr and en,
-/// and from the folders directly for any other language.
-fn posts_in(project: &str, cfg: &ProjectConfig, lang: &str, linkedin: bool, published: bool) -> Vec<Value> {
+/// Posts of one kind and place in one language.
+fn posts_in(project: &str, lang: &str, linkedin: bool, published: bool) -> Vec<Value> {
     let all = load_posts(project);
-    match (lang, linkedin, published) {
-        ("fr", false, false) => all.queue_fr.iter().map(post_row).collect(),
-        ("fr", false, true) => all.published_fr.iter().map(post_row).collect(),
-        ("en", false, false) => all.queue_en.iter().map(post_row).collect(),
-        ("en", false, true) => all.published_en.iter().map(post_row).collect(),
-        ("fr", true, false) => all.linkedin_queue_fr.iter().map(linkedin_row).collect(),
-        ("fr", true, true) => all.linkedin_published_fr.iter().map(linkedin_row).collect(),
-        ("en", true, false) => all.linkedin_queue_en.iter().map(linkedin_row).collect(),
-        ("en", true, true) => all.linkedin_published_en.iter().map(linkedin_row).collect(),
-        _ => {
-            let dir = folder(project, cfg, lang, linkedin, published);
-            let mut names: Vec<String> = std::fs::read_dir(&dir)
-                .map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
-                .unwrap_or_default();
-            names.retain(|n| n.ends_with(".md"));
-            names.sort();
-            names.into_iter().map(|n| json!({ "filename": n })).collect()
-        }
+    if linkedin {
+        let shelf = all.linkedin(lang);
+        let posts = if published { &shelf.published } else { &shelf.queue };
+        posts.iter().map(linkedin_row).collect()
+    } else {
+        let shelf = all.blog(lang);
+        let posts = if published { &shelf.published } else { &shelf.queue };
+        posts.iter().map(post_row).collect()
+    }
+}
+
+/// A blog draft's path, refused when there is no such draft: where drafts sit with published
+/// posts, the file being there isn't enough.
+fn draft_path(project: &str, cfg: &ProjectConfig, lang: &str, name: &str, linkedin: bool) -> Result<PathBuf, String> {
+    let path = folder(project, cfg, lang, linkedin, false).join(name);
+    let is_draft = |p: &Path| {
+        linkedin
+            || cfg.drafts == crate::state::Drafts::Folder
+            || std::fs::read_to_string(p).is_ok_and(|c| frontmatter::flag(&frontmatter::fields(&c), "draft") == Some(true))
+    };
+    if path.is_file() && is_draft(&path) {
+        Ok(path)
+    } else {
+        Err(format!("no draft {name} in {lang}"))
     }
 }
 
@@ -426,10 +488,10 @@ fn list_posts(args: &Value) -> Result<Value, String> {
     for lang in langs {
         let mut v = serde_json::Map::new();
         if queue {
-            v.insert("queue".into(), Value::Array(posts_in(&project, &cfg, &lang, linkedin, false)));
+            v.insert("queue".into(), Value::Array(posts_in(&project, &lang, linkedin, false)));
         }
         if done {
-            v.insert("published".into(), Value::Array(posts_in(&project, &cfg, &lang, linkedin, true)));
+            v.insert("published".into(), Value::Array(posts_in(&project, &lang, linkedin, true)));
         }
         out.insert(lang, Value::Object(v));
     }
@@ -446,7 +508,19 @@ fn get_post(args: &Value) -> Result<Value, String> {
     let social: Option<SocialPosts> = std::fs::read_to_string(path.with_extension("social.json"))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok());
-    Ok(json!({ "path": path, "content": content, "words": words(&content), "social": social }))
+    let front_matter = frontmatter::fields(&content);
+    let checks: Vec<Value> = load_posts(&project)
+        .blog(&lang)
+        .queue
+        .into_iter()
+        .chain(load_posts(&project).blog(&lang).published)
+        .find(|p| p.path == path)
+        .map(|post| crate::checks::check(&post, &project, &cfg))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|i| json!({ "level": if i.level == crate::checks::Level::Problem { "problem" } else { "warning" }, "message": i.message }))
+        .collect();
+    Ok(json!({ "path": path, "front_matter": front_matter, "content": content, "words": words(&content), "social": social, "checks": checks }))
 }
 
 async fn queue_post(args: &Value) -> Result<Value, String> {
@@ -482,10 +556,11 @@ async fn queue_post(args: &Value) -> Result<Value, String> {
     Ok(json!({ "queued": path, "words": words(&body), "social": social }))
 }
 
-/// Where the post will live on the site, as the app builds it for the teasers.
+/// Where the post will live on the site, as the app builds it for the teasers: its `slug`
+/// field, or its file name.
 fn post_url(cfg: &ProjectConfig, lang: &str, path: &str) -> String {
-    let slug = Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    format!("{}/{}/blog/{}", cfg.site_url, lang, slug)
+    let name = Path::new(path).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    cfg.address(lang, &name, &std::fs::read_to_string(path).unwrap_or_default())
 }
 
 fn update_post(args: &Value) -> Result<Value, String> {
@@ -493,12 +568,12 @@ fn update_post(args: &Value) -> Result<Value, String> {
     let cfg = ProjectConfig::load(&project);
     let lang = language(args, &cfg)?;
     let name = filename(args)?;
-    let path = folder(&project, &cfg, &lang, linkedin(args)?, false).join(&name);
-    let current = std::fs::read_to_string(&path).map_err(|_| format!("no draft {name} in the {lang} queue"))?;
+    let path = draft_path(&project, &cfg, &lang, &name, linkedin(args)?)?;
+    let current = std::fs::read_to_string(&path).map_err(|_| format!("no draft {name} in {lang}"))?;
     let updated = match (args["content"].as_str(), args["body"].as_str()) {
         (Some(c), _) => {
-            if !c.starts_with("---") {
-                return Err("content is the whole file, front matter (---) first".into());
+            if frontmatter::split(c).is_none() {
+                return Err("content is the whole file, front matter (--- or +++) first".into());
             }
             c.to_string()
         }
@@ -512,11 +587,11 @@ fn update_post(args: &Value) -> Result<Value, String> {
     Ok(json!({ "updated": path, "words": words(&updated) }))
 }
 
-/// The front matter, `---` lines included, of a post that has one.
+/// The front matter, fence lines included, of a post that has one.
 fn split_front_matter(content: &str) -> Option<&str> {
-    let rest = content.strip_prefix("---")?;
-    let end = rest.find("\n---")? + 3 + 4;
-    Some(&content[..end])
+    let parts = frontmatter::split(content)?;
+    let end = content.len() - parts.body.len();
+    Some(content[..end].trim_end_matches(['\n', '\r']))
 }
 
 async fn set_social(args: &Value) -> Result<Value, String> {
@@ -530,13 +605,8 @@ async fn set_social(args: &Value) -> Result<Value, String> {
     }
     let path = path.to_string_lossy().into_owned();
     let social = if args["generate"].as_bool().unwrap_or(false) {
-        let post = std::fs::read_to_string(&path).unwrap_or_default();
-        let field = |key: &str| {
-            post.lines()
-                .find_map(|l| l.strip_prefix(&format!("{key}:")))
-                .map(|v| v.trim().trim_matches('"').to_string())
-                .unwrap_or_default()
-        };
+        let fields = frontmatter::fields(&std::fs::read_to_string(&path).unwrap_or_default());
+        let field = |key: &str| frontmatter::text(&fields, key).unwrap_or_default();
         let (app, key) = model()?;
         let url = post_url(&cfg, &lang, &path);
         api::generate_social_posts(&field("title"), &field("description"), &lang, &url, &app.provider, &key)
@@ -565,21 +635,84 @@ fn publish(args: &Value) -> Result<Value, String> {
     let lang = language(args, &cfg)?;
     let name = filename(args)?;
     let linkedin = linkedin(args)?;
-    if !folder(&project, &cfg, &lang, linkedin, false).join(&name).is_file() {
-        return Err(format!("no draft {name} in the {lang} queue"));
-    }
+    draft_path(&project, &cfg, &lang, &name, linkedin)?;
     if linkedin {
-        api::publish_linkedin_post(&project, &lang, &name)
-    } else {
-        api::publish_post(&project, &lang, &name, &cfg)
+        api::publish_linkedin_post(&project, &cfg, &lang, &name).map_err(|e| format!("{e:#}"))?;
+        return Ok(json!({ "published": folder(&project, &cfg, &lang, true, true).join(&name) }));
     }
-    .map_err(|e| format!("{e:#}"))?;
-    let now = folder(&project, &cfg, &lang, linkedin, true).join(&name);
-    let mut v = json!({ "published": now });
-    if !linkedin {
-        v["note"] = json!("The site's index was rebuilt with scripts/generate-blog-data.js; the post goes live with the site's next deploy.");
+    if !args["force"].as_bool().unwrap_or(false) {
+        let post = load_posts(&project).blog(&lang).queue.into_iter().find(|p| p.filename == name);
+        if let Some(post) = post {
+            let issues = crate::checks::check(&post, &project, &cfg);
+            let problems: Vec<&str> = crate::checks::problems(&issues).iter().map(|i| i.message.as_str()).collect();
+            if !problems.is_empty() {
+                return Err(format!("not published, its checks found problems: {} Fix them, or pass force: true if the user wants it out anyway.", problems.join(" ")));
+            }
+        }
     }
+    let done = api::publish_post(&project, &lang, &name, &cfg).map_err(|e| format!("{e:#}"))?;
+    let mut v = json!({ "published": done.path, "url": cfg.post_url(&lang, &name) });
+    v["note"] = match &done.command {
+        None => json!("The site has no publish command; the post goes live with the site's next build and deploy."),
+        Some(run) if run.ok => json!(format!("{} ran; the post goes live with the site's next deploy.", run.command)),
+        Some(run) => json!(format!("The post is published, but {} failed: {}", run.command, run.output)),
+    };
     Ok(v)
+}
+
+fn schedule(args: &Value) -> Result<Value, String> {
+    let project = project_path(args)?;
+    let cfg = ProjectConfig::load(&project);
+    let lang = language(args, &cfg)?;
+    let name = filename(args)?;
+    draft_path(&project, &cfg, &lang, &name, false)?;
+    let stage = match args["stage"].as_str() {
+        Some(s) => Some(Stage::from_key(s).ok_or(format!("stage is idea, draft or review, not {s}"))?),
+        None => None,
+    };
+    let publish_at = match args["publish_at"].as_str().map(str::trim) {
+        Some("") => Some(None),
+        Some(s) => {
+            let when = plan::parse_when(s).ok_or(format!("publish_at is a local date and time like 2026-11-02T09:00, not {s}"))?;
+            Some(Some(plan::format_when(when)))
+        }
+        None => None,
+    };
+    if stage.is_none() && publish_at.is_none() {
+        return Err("give stage, publish_at, or both".into());
+    }
+    plan::update(&project, &lang, &name, |entry| {
+        if let Some(stage) = stage {
+            entry.stage = stage;
+        }
+        if let Some(when) = publish_at {
+            entry.publish_at = when;
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    let entry = plan::Plan::load(&project).get(&lang, &name);
+    Ok(json!({ "post": name, "stage": entry.stage.key(), "publish_at": entry.publish_at }))
+}
+
+async fn crosspost(args: &Value) -> Result<Value, String> {
+    use crate::crosspost::{Article, Target};
+    let project = project_path(args)?;
+    let cfg = ProjectConfig::load(&project);
+    let lang = language(args, &cfg)?;
+    let name = filename(args)?;
+    let target = text(args, "target")?;
+    let target = Target::from_key(&target).ok_or(format!("target is devto, hashnode, wordpress or ghost, not {target}"))?;
+    let path = folder(&project, &cfg, &lang, false, true).join(&name);
+    let content = std::fs::read_to_string(&path).map_err(|_| format!("no published post {name} in {lang}"))?;
+    if frontmatter::flag(&frontmatter::fields(&content), "draft") == Some(true) {
+        return Err(format!("{name} is a draft; publish it first"));
+    }
+    let article = Article::of(&content, &cfg.site_url, &cfg.address(&lang, &name, &content));
+    let accounts = AppConfig::load().crosspost;
+    let copy = crate::crosspost::crosspost(&project, &accounts, target, &lang, &name, &article)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    Ok(json!({ "target": target.label(), "url": copy.url, "as_draft": accounts.as_draft, "canonical_url": article.canonical_url }))
 }
 
 fn delete(args: &Value) -> Result<Value, String> {
@@ -588,11 +721,9 @@ fn delete(args: &Value) -> Result<Value, String> {
     let lang = language(args, &cfg)?;
     let name = filename(args)?;
     let linkedin = linkedin(args)?;
-    if !folder(&project, &cfg, &lang, linkedin, false).join(&name).is_file() {
-        return Err(format!("no draft {name} in the {lang} queue"));
-    }
+    draft_path(&project, &cfg, &lang, &name, linkedin)?;
     if linkedin {
-        api::delete_linkedin_queued(&project, &lang, &name)
+        api::delete_linkedin_queued(&project, &cfg, &lang, &name)
     } else {
         api::delete_queued(&project, &lang, &name, &cfg)
     }
@@ -610,11 +741,11 @@ async fn queue_linkedin(args: &Value) -> Result<Value, String> {
         None if args["generate"].as_bool().unwrap_or(false) => {
             let (app, key) = model()?;
             let angle = args["angle"].as_str().unwrap_or("");
-            api::generate_linkedin_post(&topic, angle, &lang, &app.provider, &key).await.map_err(|e| format!("{e:#}"))?
+            api::generate_linkedin_post(&topic, angle, &lang, &app.provider, &key, &cfg).await.map_err(|e| format!("{e:#}"))?
         }
         None => return Err("give body, or generate: true (with an angle) to have PublishKit's model write it".into()),
     };
-    let path = api::save_linkedin_to_queue(&project, &topic, &lang, &body).map_err(|e| format!("{e:#}"))?;
+    let path = api::save_linkedin_to_queue(&project, &cfg, &topic, &lang, &body).map_err(|e| format!("{e:#}"))?;
     Ok(json!({ "queued": path, "words": words(&body) }))
 }
 
@@ -737,7 +868,8 @@ mod tests {
     #[test]
     fn a_file_name_never_leaves_its_folder() {
         assert_eq!(filename(&json!({ "filename": "post.md" })).unwrap(), "post.md");
-        for bad in ["../post.md", "a/b.md", ".hidden.md", "post.txt", "..\\x.md"] {
+        assert_eq!(filename(&json!({ "filename": "post/index.mdx" })).unwrap(), "post/index.mdx");
+        for bad in ["../post.md", "a/b.md", ".hidden.md", "post.txt", "..\\x.md", "../index.md", "a/b/index.md", "/index.md"] {
             assert!(filename(&json!({ "filename": bad })).is_err(), "{bad}");
         }
     }
@@ -747,6 +879,7 @@ mod tests {
         let post = "---\ntitle: \"A\"\nstatus: \"draft\"\n---\n\n# A\n\nOld.";
         assert_eq!(split_front_matter(post), Some("---\ntitle: \"A\"\nstatus: \"draft\"\n---"));
         assert_eq!(split_front_matter("no front matter"), None);
+        assert_eq!(split_front_matter("+++\ntitle = \"A\"\n+++\nBody"), Some("+++\ntitle = \"A\"\n+++"));
     }
 
     #[test]
