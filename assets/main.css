@@ -221,13 +221,13 @@ body { height: 100vh; overflow: hidden; background: var(--bg0); color: var(--tex
   letter-spacing: .05em; color: var(--text3);
 }
 input, textarea {
-  width: 100%; background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 8px 11px; color: var(--text1); font-size: 13px;
+  width: 100%; background: var(--bg0); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; color: var(--text1); font-size: 12px;
   outline: none; transition: border-color .15s; resize: vertical;
   font-family: var(--mono);
 }
 input::placeholder, textarea::placeholder { color: var(--text3); }
-input:focus, textarea:focus { border-color: var(--blue); background: var(--bg0); }
+input:focus, textarea:focus { border-color: var(--blue); }
 
 .btn-generate { width: 100%; margin-top: 4px; }
 .status-msg { font-size: 12px; color: var(--text2); padding: 4px 0; }
@@ -369,25 +369,28 @@ a.btn-small { text-decoration: none; }
 /* ── Modal ───────────────────────── */
 .modal-backdrop {
   position: fixed; inset: 0;
-  background: rgba(10,4,16,.6);
+  background: rgba(0, 0, 0, 0.55);
   z-index: 100;
 }
 .modal {
   position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   z-index: 101;
-  width: 480px;
+  width: 460px; max-width: calc(100vw - 32px);
+  max-height: 84vh; overflow-y: auto;
   background: var(--bg1); border: 1px solid var(--border);
-  border-radius: 10px; box-shadow: 0 24px 64px rgba(0,0,0,.6);
+  border-radius: 12px;
   display: flex; flex-direction: column;
 }
-.modal-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 22px 0;
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 13px 16px; border-bottom: 1px solid var(--border2);
 }
-.modal-header h2 { font-size: 16px; font-weight: 700; color: var(--text1); }
-.modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 22px; }
-.modal-footer { padding: 0 22px 18px; display: flex; justify-content: flex-end; }
+.modal-head h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text1); }
+.modal-close { padding: 0; background: none; border: none; color: var(--text3); font-size: 19px; line-height: 1; cursor: pointer; }
+.modal-close:hover { color: var(--text1); }
+.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 13px; }
+.modal-footer { padding: 0 16px 16px; display: flex; justify-content: flex-end; }
 
 /* ── Settings fields ─────────────── */
 .settings-field { display: flex; flex-direction: column; gap: 8px; }
@@ -402,11 +405,11 @@ a.btn-small { text-decoration: none; }
   font-size: 13px; font-weight: 700; color: var(--text1);
   padding-top: 14px; border-top: 1px solid var(--border);
 }
-.settings-modal { max-height: calc(100vh - 48px); overflow-y: auto; width: min(520px, calc(100vw - 32px)); }
+
 select {
-  width: 100%; background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 7px 9px; color: var(--text1); font-size: 13px;
-  font-family: inherit; outline: none;
+  width: 100%; background: var(--bg0); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; color: var(--text1); font-size: 12px;
+  font-family: var(--mono); outline: none;
 }
 select:focus { border-color: var(--blue); }
 
@@ -508,7 +511,7 @@ select:focus { border-color: var(--blue); }
 .consent-banner-button:hover { background: rgba(255, 255, 255, 0.15); }
 
 /* "Use PublishKit from Claude": what to paste, and where. */
-.mcp-modal { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.mcp-modal { width: min(620px, calc(100vw - 32px)); }
 .mcp-lead { font-size: 12.5px; line-height: 1.6; }
 .mcp-snippet-wrap { position: relative; }
 .mcp-snippet {
@@ -672,3 +675,7 @@ select:focus { border-color: var(--blue); }
 .format-hint { margin-left: auto; font-size: 10px; color: var(--text3); }
 
 .social-share { display: flex; gap: 6px; margin-top: 8px; }
+
+/* Header controls: one height, borders included, whatever their padding or font. */
+.topbar button, .topbar select, .topbar a.btn-small, .topbar .mode-tabs { height: 30px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; display: inline-flex; align-items: center; justify-content: center; }
+.topbar .mode-tabs .tab { height: 100%; }

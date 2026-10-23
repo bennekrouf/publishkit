@@ -425,6 +425,12 @@ pub fn site_label(project_path: &str) -> String {
 /// The project's config file: `publishkit.yaml`, or `blog-toolkit.yaml` in a
 /// project set up before the app was renamed PublishKit. That file is kept
 /// rather than renamed: it sits in the person's own repository.
+/// A folder from publishkit.yaml, always written with `/`, as a path in this platform's
+/// separators: joined as-is on Windows it gives `C:\\site\\content/en/queue`.
+fn native(relative: &str) -> PathBuf {
+    relative.split(['/', '\\']).filter(|part| !part.is_empty()).collect()
+}
+
 fn config_path(project_path: &str) -> PathBuf {
     let path = PathBuf::from(project_path).join("publishkit.yaml");
     let legacy = PathBuf::from(project_path).join("blog-toolkit.yaml");
@@ -540,8 +546,8 @@ impl ProjectConfig {
         if let Some(cp) = &self.content_paths {
             if let Some(lp) = cp.langs.get(lang) {
                 return (
-                    PathBuf::from(project_path).join(&lp.queue),
-                    PathBuf::from(project_path).join(&lp.blog),
+                    PathBuf::from(project_path).join(native(&lp.queue)),
+                    PathBuf::from(project_path).join(native(&lp.blog)),
                 );
             }
         }
@@ -556,7 +562,7 @@ impl ProjectConfig {
         let root = if self.linkedin_dir.is_empty() {
             PathBuf::from(project_path).join("content").join(lang).join("linkedin")
         } else {
-            PathBuf::from(project_path).join(&self.linkedin_dir).join(lang)
+            PathBuf::from(project_path).join(native(&self.linkedin_dir)).join(lang)
         };
         (root.join("queue"), root.join("published"))
     }
@@ -1154,6 +1160,17 @@ mod tests {
         assert_eq!(cfg.content_paths.unwrap().langs["fr"].queue, "drafts/fr");
         assert_eq!(cfg.publish_command, "node scripts/generate-blog-data.js");
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn configured_folders_join_with_the_platform_separator() {
+        let mut cfg = ProjectConfig::default();
+        let mut langs = BTreeMap::new();
+        langs.insert("en".to_string(), LangPaths { queue: "content/en/queue".into(), blog: "content/en/blog/".into(), suffix: String::new() });
+        cfg.content_paths = Some(ContentPaths { langs });
+        let (queue, blog) = cfg.resolve_paths("/site", "en");
+        assert_eq!(queue, Path::new("/site").join("content").join("en").join("queue"));
+        assert_eq!(blog, Path::new("/site").join("content").join("en").join("blog"));
     }
 
     #[test]

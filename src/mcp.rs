@@ -786,9 +786,9 @@ pub fn McpModal(show: Signal<bool>) -> Element {
     rsx! {
         div { class: "modal-backdrop", onclick: move |_| show.set(false) }
         div { class: "modal mcp-modal",
-            div { class: "modal-header",
+            div { class: "modal-head",
                 h2 { "Use PublishKit from Claude" }
-                button { class: "btn-icon", onclick: move |_| show.set(false), "✕" }
+                button { class: "modal-close", title: "Close", onclick: move |_| show.set(false), "×" }
             }
             div { class: "modal-body",
                 p { class: "settings-hint mcp-lead",
