@@ -15,6 +15,21 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- The usage-statistics notice now looks the same as in GitAgent: a blue bar
+  along the bottom of the window.
+- Every action button is now 30px tall, borders included, like the
+  regular buttons beside it.
+
+### Added
+
+- The model is now shown at the top of the window with its region's flag.
+  Click it to switch between Europe, China and the United States without
+  opening Settings.
+
 ## [0.1.22] - 2026-10-23
 
 ### Changed

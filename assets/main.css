@@ -338,6 +338,26 @@ a.btn-small { text-decoration: none; }
   border-radius: 4px; color: var(--text2); letter-spacing: .04em;
 }
 
+/* ── Model switcher (topbar) ─────── */
+.model-switcher { position: relative; flex-shrink: 0; }
+.topbar .model-current { gap: 6px; font-weight: 600; }
+.model-current .region-flag, .model-option .region-flag { width: 18px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+.model-caret { font-size: 9px; color: var(--text3); }
+.model-backdrop { position: fixed; inset: 0; z-index: 90; }
+.model-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 91; min-width: 170px;
+  display: flex; flex-direction: column; padding: 4px;
+  background: var(--bg1); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+}
+.topbar .model-option {
+  font-family: inherit; justify-content: flex-start; gap: 8px; height: 30px; padding: 0 10px;
+  background: none; border: 1px solid transparent; border-radius: 4px;
+  color: var(--text1); font-size: 12px; cursor: pointer; text-align: left;
+}
+.topbar .model-option:hover { background: var(--bg2); }
+.topbar .model-option.active { border-color: var(--blue); background: var(--blue-dark); }
+
 /* ── Icon buttons (gear, theme, close) ────
    Positioned last on the right of the topbar, matching ais-runner's
    theme-toggle placement. */
@@ -486,21 +506,63 @@ select:focus { border-color: var(--blue); }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); background-clip: content-box; }
 
 /* Usage-statistics notice, shown once along the bottom edge. */
-.consent-banner {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  background: var(--primary);
-  color: #fff;
-  font-size: 13px;
-  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.25);
+/* Update, notice and consent banners: GitAgent's, so every app shows them alike. */
+.update-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 999;
+    background: #4fa3ff;
+    color: #fff;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font: 13px var(--mono);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
 }
+.update-banner-text { flex: 1; }
+.update-banner-text strong { font-weight: 700; }
+.update-banner-link {
+    color: #fff;
+    text-decoration: underline;
+    font-weight: 600;
+    padding: 4px 10px;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 4px;
+}
+.update-banner-link:hover { background: rgba(255,255,255,0.15); }
+.update-banner-dismiss {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 4px;
+    opacity: 0.7;
+}
+.update-banner-dismiss:hover { opacity: 1; }
+button.update-banner-link {
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    height: auto;
+}
+.consent-banner {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 999;
+    background: #4fa3ff;
+    color: #fff;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font: 13px var(--mono);
+    box-shadow: 0 -2px 6px rgba(0,0,0,0.25);
+}
+body.light .update-banner, body.light .consent-banner { background: #1e5fb8; }
 .consent-banner-text { flex: 1; }
-.consent-banner-text strong { font-weight: 700; }
 .consent-banner-button {
   background: transparent;
   color: #fff;
@@ -511,7 +573,6 @@ select:focus { border-color: var(--blue); }
   border-radius: 4px;
   cursor: pointer;
 }
-.consent-banner-button:hover { background: rgba(255, 255, 255, 0.15); }
 
 /* "Use PublishKit from Claude": what to paste, and where. */
 .mcp-modal { width: min(620px, calc(100vw - 32px)); }
@@ -682,3 +743,6 @@ select:focus { border-color: var(--blue); }
 /* Header controls: one height, borders included, whatever their padding or font. */
 .topbar button, .topbar select, .topbar a.btn-small, .topbar .mode-tabs { height: 30px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; display: inline-flex; align-items: center; justify-content: center; }
 .topbar .mode-tabs .tab { height: 100%; }
+
+/* Action buttons: the same 30px wherever they sit; Copy inside a snippet stays small. */
+.btn-small:not(.mcp-copy), .btn-icon, .btn-theme { height: 30px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; display: inline-flex; align-items: center; justify-content: center; }
