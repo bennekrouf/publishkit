@@ -15,6 +15,15 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- API requests now include a header specifying the task kind, allowing api0 to
+  route writing tasks to the appropriate region-specific model. This ensures
+  that the writing process is optimized for the selected region and leverages
+  the AI credits shared across Mayorana apps on the same computer.
+
 ## [0.1.19] - 2026-10-22
 
 ### Removed
