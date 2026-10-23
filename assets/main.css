@@ -118,6 +118,9 @@ body.dark {
   --orange:     #e08a4a;
 }
 
+/* Form controls do not inherit type by default; keep them in the shared stack. */
+input, button, textarea, select { font-family: inherit; }
+
 body { height: 100vh; overflow: hidden; background: var(--bg0); color: var(--text1); }
 
 /* ── Setup screen ─────────────────────────── */
