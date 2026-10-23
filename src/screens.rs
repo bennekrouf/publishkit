@@ -550,13 +550,9 @@ fn SettingsModal(config: Signal<AppConfig>, show_settings: Signal<bool>, posts: 
             onclick: move |_| *show_settings.write() = false,
         }
         div { class: "modal settings-modal",
-            div { class: "modal-header",
+            div { class: "modal-head",
                 h2 { "Settings" }
-                button {
-                    class: "btn-icon",
-                    onclick: move |_| *show_settings.write() = false,
-                    "✕"
-                }
+                button { class: "modal-close", title: "Close", onclick: move |_| *show_settings.write() = false, "×" }
             }
 
             div { class: "modal-body",
