@@ -9,6 +9,10 @@ use serde_json::Value;
 /// The product id api0 puts the credits down to.
 pub const PRODUCT: &str = "publishkit";
 
+/// The kind of work PublishKit's calls do, for api0's `X-Task`: a region may run another
+/// model for writing than for code or chat.
+pub const TASK: &str = "text";
+
 /// api0's OpenAI-compatible endpoint.
 pub const BASE_URL: &str = "https://gateway.api0.ai/v1";
 
@@ -98,6 +102,8 @@ pub async fn regions() -> Result<Vec<RegionOffer>, String> {
         .get(format!("{BASE_URL}/models"))
         .bearer_auth(key)
         .header("X-Client-App", PRODUCT)
+        // So the credits shown are those of the model that writes.
+        .header("X-Task", TASK)
         .timeout(std::time::Duration::from_secs(15))
         .send()
         .await

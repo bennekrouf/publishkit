@@ -119,6 +119,8 @@ async fn call(provider: &LlmProvider, system: &str, user: &str, api_key: &str) -
         .header("Content-Type", "application/json")
         // So api0 puts the credits down to PublishKit.
         .header("X-Client-App", crate::api0::PRODUCT)
+        // So api0 runs the region's model for writing.
+        .header("X-Task", crate::api0::TASK)
         .json(&body).send().await.with_context(|| format!("{name} request failed"))?;
 
     if !resp.status().is_success() {
