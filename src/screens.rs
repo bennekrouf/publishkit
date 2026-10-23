@@ -64,13 +64,13 @@ pub fn App() -> Element {
         // is remembered.
         if ask_consent() {
             div { class: "consent-banner",
-                span { class: "consent-banner-text",
+                span { class: "update-banner-text",
                     strong { "PublishKit shares anonymous usage statistics. " }
                     "Whether it is installed and opened, and its version and operating system \
                      — never your posts, files, keys or anything you type."
                 }
                 button {
-                    class: "consent-banner-button",
+                    class: "update-banner-link",
                     onclick: move |_| {
                         crate::telemetry::set_consent(true);
                         ask_consent.set(false);
@@ -78,7 +78,7 @@ pub fn App() -> Element {
                     "OK"
                 }
                 button {
-                    class: "consent-banner-button",
+                    class: "update-banner-link",
                     onclick: move |_| {
                         crate::telemetry::set_consent(false);
                         ask_consent.set(false);
@@ -237,6 +237,51 @@ fn SiteSwitcher(
     }
 }
 
+/// The api0 region posts are written in, flag and name, and a click to change it right here.
+#[component]
+fn ModelSwitcher(config: Signal<AppConfig>) -> Element {
+    let mut open = use_signal(|| false);
+    let region = config.read().provider.region();
+    rsx! {
+        div { class: "model-switcher",
+            button {
+                class: "btn-small model-current",
+                title: "The model posts are written with \u{2014} click to change it",
+                onclick: move |_| open.toggle(),
+                match region {
+                    Some(r) => rsx! {
+                        crate::api0::RegionFlag { id: r.id }
+                        span { "{r.label}" }
+                    },
+                    None => rsx! { span { "{config.read().provider.label()}" } },
+                }
+                span { class: "model-caret", "\u{25BE}" }
+            }
+            if open() {
+                div { class: "model-backdrop", onclick: move |_| open.set(false) }
+                div { class: "model-menu",
+                    for r in crate::api0::REGIONS {
+                        button {
+                            key: "{r.id}",
+                            class: if region == Some(r) { "model-option active" } else { "model-option" },
+                            title: "api0, in {r.label}",
+                            onclick: move |_| {
+                                let mut cfg = config.write();
+                                cfg.provider = LlmProvider::api0(r.id);
+                                cfg.save();
+                                drop(cfg);
+                                open.set(false);
+                            },
+                            crate::api0::RegionFlag { id: r.id }
+                            span { "{r.label}" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ── Main layout ───────────────────────────────────────────────────────────────
 
 #[component]
@@ -354,10 +399,7 @@ fn MainLayout(
                 span { class: "topbar-path",
                     { config.read().project_path.as_deref().unwrap_or("") }
                 }
-                // provider badge
-                span { class: "provider-badge",
-                    { config.read().provider.label() }
-                }
+                ModelSwitcher { config }
                 button {
                     class: "btn-small",
                     onclick: move |_| {
