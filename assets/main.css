@@ -252,9 +252,9 @@ input:focus, textarea:focus { border-color: var(--blue); background: var(--bg0);
 
 /* ── Buttons ─────────────────────────────── */
 .btn-primary {
-  font-family: inherit;
-  padding: 8px 16px; background: var(--blue-bg); color: #fff; border: none;
-  border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: var(--mono);
+  padding: 7px 14px; background: var(--blue-bg); color: #fff; border: 1px solid var(--blue-bg);
+  border-radius: 7px; font-size: 12px; cursor: pointer;
   transition: opacity .15s;
 }
 .btn-primary:hover:not(:disabled) { opacity: .85; }

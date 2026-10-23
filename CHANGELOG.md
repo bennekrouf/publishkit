@@ -15,6 +15,13 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- Buttons now have the same size, rounded corners and typeface as in
+  GitAgent, so they look alike across the Mayorana apps.
+
 ## [0.1.20] - 2026-10-23
 
 ### Added
