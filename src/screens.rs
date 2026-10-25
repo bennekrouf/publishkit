@@ -56,6 +56,24 @@ pub fn App() -> Element {
         }
     });
 
+    // PublishKit Pro: checked with api0 at start, then once a day.
+    let pro = use_context_provider(|| crate::pro::Pro {
+        open: Signal::new(false),
+        status: Signal::new(crate::licence::current()),
+    });
+    // The title bar follows the licence, however it changes.
+    use_effect(move || {
+        dioxus::desktop::window().set_title(&crate::window_title(&pro.status.read()));
+    });
+    let mut pro_status = pro.status;
+    use_future(move || async move {
+        pro_status.set(crate::licence::refresh(true).await);
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+            pro_status.set(crate::licence::refresh(false).await);
+        }
+    });
+
     let has_project = config.read().project_path.is_some();
 
     rsx! {
@@ -400,6 +418,7 @@ fn MainLayout(
                     { config.read().project_path.as_deref().unwrap_or("") }
                 }
                 ModelSwitcher { config }
+                crate::pro::ProButton {}
                 button {
                     class: "btn-small",
                     onclick: move |_| {
@@ -512,6 +531,7 @@ fn MainLayout(
             }
 
             // Settings modal overlay
+            crate::pro::ProWindow {}
             if *show_settings.read() {
                 SettingsModal { config, show_settings, posts }
             }
