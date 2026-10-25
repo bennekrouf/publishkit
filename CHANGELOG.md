@@ -15,6 +15,22 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- Installing PublishKit no longer needs admin rights anywhere. On macOS and
+  Linux, the setup script puts Node.js in your home folder instead of
+  installing Homebrew or asking for sudo; on Linux, the launcher goes into your
+  own applications menu, and only a missing WebKitGTK asks for your password.
+- On Windows, the Start menu, desktop shortcut and installer say PublishKit
+  instead of Blog Manager. Shortcuts left from an earlier install under the old
+  name are removed when you update.
+- On Windows, PublishKit always installs for your user only, in
+  `%LOCALAPPDATA%\Programs`, without asking. An update no longer moves it to
+  Program Files because an old Blog Manager was once installed there, which
+  broke the PublishKit entry you had added to Claude Code.
+
 ## [0.1.24] - 2026-10-25
 
 ### Added

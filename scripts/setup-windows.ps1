@@ -1,10 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Blog Manager - Windows dependency installer.
+    PublishKit - Windows dependency installer.
 
 .DESCRIPTION
-    Installs the tools that blog-manager needs on Windows:
+    Installs the tools that PublishKit needs on Windows:
         Node.js  v20 LTS   (required by generate-blog-data.js when publishing posts)
         WebView2 runtime   (required by the Dioxus desktop shell — usually pre-installed on Windows 11)
 
@@ -95,8 +95,8 @@ function Install-Node {
 }
 
 Write-Host ""
-Write-Host "  Blog Manager — Windows Setup" -ForegroundColor White
-Write-Host "  ============================" -ForegroundColor White
+Write-Host "  PublishKit — Windows Setup" -ForegroundColor White
+Write-Host "  ==========================" -ForegroundColor White
 Write-Host ""
 
 # ── Node.js ───────────────────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ if ((Test-Path $wv2Key) -or (Test-Path $wv2User)) {
 # ── Done ──────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  Setup complete." -ForegroundColor Green
-Write-Host "  Launch blog-manager.exe to start the app."
+Write-Host "  Launch PublishKit from the Start menu."
 Write-Host ""
 
 if (-not $NoPrompt) {

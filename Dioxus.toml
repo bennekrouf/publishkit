@@ -1,9 +1,9 @@
 [application]
-name = "Blog Manager"
+name = "PublishKit"
 default_platform = "desktop"
 
 [web.app]
-title = "Blog Manager"
+title = "PublishKit"
 
 [bundle]
 identifier = "com.mayorana.blog-toolkit"

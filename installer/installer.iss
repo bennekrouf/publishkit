@@ -1,4 +1,4 @@
-; Blog Manager — Windows Installer
+; PublishKit — Windows Installer
 ; Build: iscc /DMyAppVersion=X.Y.Z installer\installer.iss
 ; Output: dist\publishkit-setup.exe
 
@@ -6,7 +6,7 @@
   #define MyAppVersion "0.1.0"
 #endif
 
-#define MyAppName      "Blog Manager"
+#define MyAppName      "PublishKit"
 #define MyAppPublisher "Mayorana"
 #define MyAppURL       "https://github.com/Bennekrouf/publishkit"
 #define MyAppExeName   "publishkit.exe"
@@ -27,12 +27,17 @@ OutputBaseFilename=publishkit-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; Per-user install by default (no UAC prompt): {autopf} resolves to
-; %LOCALAPPDATA%\Programs. The dialog still offers an all-users install, and
-; UsePreviousPrivileges (default yes) keeps upgrades of an earlier machine-wide
-; install in Program Files instead of creating a second copy.
+; Always a per-user install (no UAC prompt): {autopf} resolves to
+; %LOCALAPPDATA%\Programs, the folder the site's MCP command and Claude Code
+; entries point at. Blog Manager 0.1.4 and earlier installed machine-wide under
+; the same AppId, so UsePreviousPrivileges is off: otherwise an upgrade follows
+; that old install into Program Files. /ALLUSERS still installs machine-wide.
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog commandline
+PrivilegesRequiredOverridesAllowed=commandline
+UsePreviousPrivileges=no
+; Start menu entries under the app's name, not the folder an earlier install
+; made under the old name (removed in [InstallDelete]).
+UsePreviousGroup=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Windows 10 1809+ required for WebView2
@@ -71,6 +76,11 @@ Source: "..\README.md";                         DestDir: "{app}"; Flags: ignorev
 ; the icon embedded in the .exe for shortcut display.
 Source: "..\assets\icon.ico";                   DestDir: "{app}"; Flags: ignoreversion
 #endif
+
+[InstallDelete]
+; Shortcuts left by installs from when the app was called Blog Manager.
+Type: filesandordirs; Name: "{autoprograms}\Blog Manager"
+Type: files;          Name: "{autodesktop}\Blog Manager.lnk"
 
 [Icons]
 Name: "{group}\{#MyAppName}";           Filename: "{app}\{#MyAppExeName}"

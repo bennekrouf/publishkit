@@ -11,22 +11,30 @@ Built with [Dioxus](https://dioxuslabs.com/) (Rust, runs natively on macOS, Linu
 ### macOS (Apple Silicon)
 Download [`publishkit-macos-arm64.dmg`](https://mayorana.ch/downloads/publishkit/latest/publishkit-macos-arm64.dmg), open it, and drag **PublishKit** to Applications.
 Signed with Apple Developer ID and notarized — opens with a normal double-click.
+No admin rights? Drag it to the Applications folder in your home folder
+(`~/Applications`) instead.
 
 Publishing shells out to Node.js. If you do not already have Node 18+, run the
-`setup-mac.sh` included in the disk image once.
+`setup-mac.sh` included in the disk image once. It needs no admin rights: it
+uses Homebrew if you have it, otherwise it puts Node.js in `~/.local/nodejs`.
 
 ### Windows
 Download **publishkit-setup.exe** from the [latest release](https://github.com/Bennekrouf/publishkit/releases/latest) and run it. The installer handles Node.js and WebView2 automatically.
+It installs for your account only, without admin rights; choose *Install for all
+users* in its first dialog for a machine-wide install.
 
 ### Linux (x86_64)
 ```bash
 curl -L https://mayorana.ch/downloads/publishkit/latest/publishkit-linux-x86_64.tar.gz | tar xz
 cd publishkit-linux-x86_64
-sudo ./setup-linux.sh
+./setup-linux.sh
 ./publishkit
 ```
 
-> **Runtime requirement (Linux):** `libwebkit2gtk-4.1` — installed automatically by `setup-linux.sh` on Debian/Ubuntu, Fedora, and Arch.
+`setup-linux.sh` runs without sudo: Node.js goes into `~/.local/nodejs` and the
+launcher into your own applications menu.
+
+> **Runtime requirement (Linux):** `libwebkit2gtk-4.1` — preinstalled on most desktops. If it is missing, `setup-linux.sh` installs it on Debian/Ubuntu, Fedora, and Arch, which is the one step that asks for your password; without admin rights, it names the package to ask your administrator for.
 
 ---
 
