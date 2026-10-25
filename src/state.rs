@@ -182,8 +182,8 @@ impl Default for AppConfig {
 
 impl AppConfig {
     pub fn config_path() -> PathBuf {
-        // Still the old name: the API keys are saved here, and the last rename
-        // (Blog Manager → Blog Toolkit) lost them by moving it.
+        // Still the old name: the API keys are saved here, and an earlier rename
+        // lost them by moving it.
         directories::ProjectDirs::from("com", "mayorana", "blog-toolkit")
             .map(|d| d.config_dir().to_path_buf())
             .unwrap_or_else(|| PathBuf::from("."))
