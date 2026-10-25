@@ -15,6 +15,16 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- A Get Pro button in the top bar opens PublishKit Pro: the licence for
+  commercial use, with AI credits each month. Paste your licence number and,
+  once it is checked, a window says you're Pro, with the AI credits left and
+  the renewal date below. The title bar shows Pro too. A licence typed in
+  another Mayorana app counts here as well.
+
 ## [0.1.23] - 2026-10-23
 
 ### Changed

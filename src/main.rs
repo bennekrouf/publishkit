@@ -5,8 +5,10 @@ mod crosspost;
 mod editor;
 mod feedback;
 mod frontmatter;
+mod licence;
 mod mcp;
 mod plan;
+mod pro;
 mod state;
 mod screens;
 mod social;
@@ -15,6 +17,11 @@ mod telemetry;
 
 use dioxus::prelude::*;
 use screens::App;
+
+/// The native title bar, as in every mayorana app: name, version and licence.
+pub fn window_title(status: &licence::Status) -> String {
+    format!("PublishKit {}{}", env!("CARGO_PKG_VERSION"), status.title_badge())
+}
 
 fn main() {
     // `publishkit mcp`: the posts over stdio for an MCP client, and no window. Before the log
@@ -36,8 +43,8 @@ fn main() {
             dioxus::desktop::Config::new()
                 .with_window(
                     dioxus::desktop::WindowBuilder::new()
-                        // Name and version, as in every mayorana app; PublishKit has no Pro.
-                        .with_title(concat!("PublishKit ", env!("CARGO_PKG_VERSION")))
+                        // Name, version and licence, as in every mayorana app.
+                        .with_title(window_title(&licence::current()))
                         .with_inner_size(dioxus::desktop::LogicalSize::new(1280.0, 800.0))
                         .with_min_inner_size(dioxus::desktop::LogicalSize::new(900.0, 600.0)),
                 )
