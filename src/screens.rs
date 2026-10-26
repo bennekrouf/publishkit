@@ -510,10 +510,13 @@ fn MainLayout(
                 match *content_mode.read() {
                     ContentMode::Blog => rsx! {
                         // Made anew for each site: no search or half-written post carries over.
-                        PostList { key: "{site_key}", config, posts, selected, active_lang, notice }
-                        PanelResizer { resizing, left_width, config }
-                        CenterPanel { key: "{site_key}", config, posts, selected, editor_mode }
-                        PreviewPanel { selected, config }
+                        // (A key counts only on a block's first node, hence the fragment.)
+                        Fragment { key: "{site_key}",
+                            PostList { config, posts, selected, active_lang, notice }
+                            PanelResizer { resizing, left_width, config }
+                            CenterPanel { config, posts, selected, editor_mode }
+                            PreviewPanel { selected, config }
+                        }
                     },
                     ContentMode::Board => rsx! {
                         crate::views::Board { config, posts, selected, editor_mode, content_mode, active_lang, notice }

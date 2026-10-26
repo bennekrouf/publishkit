@@ -83,9 +83,15 @@ Type: filesandordirs; Name: "{autoprograms}\Blog Manager"
 Type: files;          Name: "{autodesktop}\Blog Manager.lnk"
 
 [Icons]
+#if FileExists(AddBackslash(SourcePath) + "..\assets\icon.ico")
+Name: "{group}\{#MyAppName}";           Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"
+Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}";   Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
+#else
 Name: "{group}\{#MyAppName}";           Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}";   Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+#endif
 
 [Run]
 Filename: "powershell.exe"; \
