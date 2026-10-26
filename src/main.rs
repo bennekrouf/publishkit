@@ -40,7 +40,7 @@ fn main() {
 
     dioxus::LaunchBuilder::new()
         .with_cfg(
-            dioxus::desktop::Config::new()
+            window_icon(dioxus::desktop::Config::new())
                 .with_window(
                     dioxus::desktop::WindowBuilder::new()
                         // Name, version and licence, as in every mayorana app.
@@ -83,4 +83,18 @@ fn publish_due_cli() -> i32 {
         }
     }
     i32::from(failed)
+}
+
+/// The window's icon (title bar, taskbar, Alt-Tab). Windows reads it from the .exe's icon
+/// resource (see build.rs) and macOS from the app bundle; Linux has to be handed it, or the
+/// window shows the Dioxus logo.
+fn window_icon(config: dioxus::desktop::Config) -> dioxus::desktop::Config {
+    #[cfg(target_os = "linux")]
+    {
+        let png = include_bytes!("../assets/icon-256.png");
+        if let Ok(icon) = dioxus::desktop::icon_from_memory::<dioxus::desktop::tao::window::Icon>(png) {
+            return config.with_icon(icon);
+        }
+    }
+    config
 }

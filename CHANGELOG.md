@@ -15,6 +15,16 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Fixed
+
+- On Windows, PublishKit's window shows the PublishKit icon in its title bar,
+  the taskbar and Alt-Tab, instead of a generic logo. The Start menu and
+  desktop shortcuts use it too. On Linux, the window shows it as well.
+- Switching sites starts the new-post form afresh again, instead of keeping
+  what was typed for the previous site.
+
 ## [0.1.25] - 2026-10-25
 
 ### Changed
