@@ -1,5 +1,7 @@
 # PublishKit
 
+![PublishKit's Blog view: published posts on the left and the form that generates a new one](docs/screenshot.png)
+
 Desktop app for writing, queuing, and publishing blog posts — powered by api0, in Europe, China or the United States.
 
 Built with [Dioxus](https://dioxuslabs.com/) (Rust, runs natively on macOS, Linux, Windows).
