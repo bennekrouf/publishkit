@@ -768,6 +768,12 @@ pub fn code_command(command: &str) -> String {
     format!("claude mcp add publishkit --scope user -- \"{command}\" mcp")
 }
 
+/// The one line that adds it to Codex. Its CLI, IDE extension and app share
+/// one list of servers, each one there for every project.
+pub fn codex_command(command: &str) -> String {
+    format!("codex mcp add publishkit -- \"{command}\" mcp")
+}
+
 fn desktop_config_path() -> &'static str {
     if cfg!(target_os = "windows") {
         "%APPDATA%\\Claude\\claude_desktop_config.json"
@@ -783,11 +789,12 @@ pub fn McpModal(show: Signal<bool>) -> Element {
     let command = command();
     let desktop = desktop_config(&command);
     let code = code_command(&command);
+    let codex = codex_command(&command);
     rsx! {
         div { class: "modal-backdrop", onclick: move |_| show.set(false) }
         div { class: "modal mcp-modal",
             div { class: "modal-head",
-                h2 { "Use PublishKit from Claude" }
+                h2 { "Use PublishKit from Claude or Codex" }
                 button { class: "modal-close", title: "Close", onclick: move |_| show.set(false), "×" }
             }
             div { class: "modal-body",
@@ -810,7 +817,12 @@ pub fn McpModal(show: Signal<bool>) -> Element {
                     Snippet { text: code.clone() }
                 }
                 div { class: "settings-field",
-                    label { "3 · Try it" }
+                    label { "3 · Codex" }
+                    p { class: "settings-hint", "Run this once in a terminal:" }
+                    Snippet { text: codex.clone() }
+                }
+                div { class: "settings-field",
+                    label { "4 · Try it" }
                     p { class: "settings-hint",
                         "Ask: “Write next week's post about remote interviews, in French and English, and queue both.”"
                     }
@@ -888,5 +900,13 @@ mod tests {
         assert_eq!(config["mcpServers"]["publishkit"]["command"], "/Applications/PublishKit.app/Contents/MacOS/publishkit");
         assert_eq!(config["mcpServers"]["publishkit"]["args"], json!(["mcp"]));
         assert_eq!(code_command("/A B/publishkit"), "claude mcp add publishkit --scope user -- \"/A B/publishkit\" mcp");
+    }
+
+    #[test]
+    fn the_codex_command_quotes_a_path_with_spaces() {
+        assert_eq!(
+            codex_command("/A B/publishkit"),
+            "codex mcp add publishkit -- \"/A B/publishkit\" mcp"
+        );
     }
 }
