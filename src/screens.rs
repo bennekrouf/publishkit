@@ -40,73 +40,19 @@ pub fn App() -> Element {
     let li_selected = use_signal(|| None::<LinkedInPost>);
     let theme = desktop_kit::ui::use_theme();
 
-    // Anonymous usage statistics. On by default, but only once the person has
-    // been told: `start` reads the opt-outs (including a shell profile's),
-    // records the launch, and says whether the notice is still owed.
-    let mut ask_consent = use_signal(|| false);
-    use_future(move || async move {
-        if crate::telemetry::start().await {
-            ask_consent.set(true);
-        }
-        crate::telemetry::flush_forever().await;
-    });
-    // Recorded while the notice is on screen, so collection starts from the
-    // next event — never from one the person had no chance to read about.
-    use_effect(move || {
-        if ask_consent() {
-            crate::telemetry::mark_informed();
-        }
-    });
-
     // PublishKit Pro: checked with api0 at start, then once a day.
-    let pro = use_context_provider(|| crate::pro::Pro {
-        open: Signal::new(false),
-        status: Signal::new(crate::licence::current()),
-    });
+    let pro = desktop_kit::ui::use_pro();
     // The title bar follows the licence, however it changes.
     use_effect(move || {
         dioxus::desktop::window().set_title(&crate::window_title(&pro.status.read()));
-    });
-    let mut pro_status = pro.status;
-    use_future(move || async move {
-        pro_status.set(crate::licence::refresh(true).await);
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
-            pro_status.set(crate::licence::refresh(false).await);
-        }
     });
 
     let has_project = config.read().project_path.is_some();
 
     rsx! {
         style { {include_str!("../assets/main.css")} }
-        // Usage-statistics notice: once, along the bottom edge. Either button
-        // is remembered.
-        if ask_consent() {
-            div { class: "consent-banner",
-                span { class: "update-banner-text",
-                    strong { "PublishKit shares anonymous usage statistics. " }
-                    "Whether it is installed and opened, and its version and operating system \
-                     — never your posts, files, keys or anything you type."
-                }
-                button {
-                    class: "update-banner-link",
-                    onclick: move |_| {
-                        crate::telemetry::set_consent(true);
-                        ask_consent.set(false);
-                    },
-                    "OK"
-                }
-                button {
-                    class: "update-banner-link",
-                    onclick: move |_| {
-                        crate::telemetry::set_consent(false);
-                        ask_consent.set(false);
-                    },
-                    "Turn off"
-                }
-            }
-        }
+        desktop_kit::ui::Banners { statistics: true }
+        desktop_kit::ui::ProWindow { pro, pitch: crate::pro::pitch() }
         if has_project {
             MainLayout { config, posts, selected, editor_mode, show_settings, content_mode, li_selected, theme }
         } else {
@@ -321,6 +267,7 @@ fn MainLayout(
     theme: Theme,
 ) -> Element {
     let mut show_mcp = use_signal(|| false);
+    let pro = use_context::<desktop_kit::ui::Pro>();
     let active_lang = use_signal(String::new);
     let mut notice = use_signal(String::new);
     let site_key = config.read().project_path.clone().unwrap_or_default();
@@ -445,7 +392,7 @@ fn MainLayout(
                     }
                 },
                 model: rsx! { ModelSwitcher { config } },
-                pro: rsx! { crate::pro::ProButton {} },
+                pro: rsx! { desktop_kit::ui::ProButton { pro, hint: crate::pro::HINT } },
                 SiteSwitcher { config, posts, selected, editor_mode, active_lang, notice }
                 {
                     let p = config.read().project_path.clone().unwrap_or_default();
@@ -507,7 +454,6 @@ fn MainLayout(
             }
 
             // Settings modal overlay
-            crate::pro::ProWindow {}
             if *show_settings.read() {
                 SettingsModal { config, show_settings, posts }
             }
