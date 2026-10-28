@@ -19,10 +19,16 @@ pub struct Issue {
 
 impl Issue {
     fn problem(message: impl Into<String>) -> Self {
-        Issue { level: Level::Problem, message: message.into() }
+        Issue {
+            level: Level::Problem,
+            message: message.into(),
+        }
     }
     fn warning(message: impl Into<String>) -> Self {
-        Issue { level: Level::Warning, message: message.into() }
+        Issue {
+            level: Level::Warning,
+            message: message.into(),
+        }
     }
 }
 
@@ -54,8 +60,14 @@ pub fn links(body: &str) -> Vec<(bool, String, String)> {
             let Some(close) = after.find("](") else { break };
             let text = &after[..close];
             let target_start = &after[close + 2..];
-            let Some(end) = target_start.find(')') else { break };
-            let target = target_start[..end].split_whitespace().next().unwrap_or("").to_string();
+            let Some(end) = target_start.find(')') else {
+                break;
+            };
+            let target = target_start[..end]
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_string();
             found.push((image, text.to_string(), target));
             rest = &target_start[end + 1..];
         }
@@ -89,11 +101,14 @@ pub fn check(post: &Post, project_path: &str, cfg: &ProjectConfig) -> Vec<Issue>
         )));
     }
 
-    let description = frontmatter::text(&fields, crate::api::description_key(&post.full_content)).unwrap_or_default();
+    let description = frontmatter::text(&fields, crate::api::description_key(&post.full_content))
+        .unwrap_or_default();
     let description = description.trim();
     let length = description.chars().count();
     if description.is_empty() {
-        issues.push(Issue::warning("It has no description: search results and link previews will make one up."));
+        issues.push(Issue::warning(
+            "It has no description: search results and link previews will make one up.",
+        ));
     } else if length < DESCRIPTION_MIN {
         issues.push(Issue::warning(format!("The description is short ({length} characters); {DESCRIPTION_MIN}–{DESCRIPTION_MAX} reads best in search results.")));
     } else if length > DESCRIPTION_MAX {
@@ -147,27 +162,45 @@ pub fn check(post: &Post, project_path: &str, cfg: &ProjectConfig) -> Vec<Issue>
     };
     for marker in MARKERS {
         if has_word(&prose, marker) || has_word(&title, marker) {
-            issues.push(Issue::problem(format!("It still says “{}”.", marker.to_uppercase())));
+            issues.push(Issue::problem(format!(
+                "It still says “{}”.",
+                marker.to_uppercase()
+            )));
         }
     }
 
     let (images_dir, images_url) = cfg.images(project_path);
     for (image, text, target) in links(body) {
         if image && text.trim().is_empty() {
-            issues.push(Issue::warning(format!("The image {target} has no description (alt text) for screen readers.")));
+            issues.push(Issue::warning(format!(
+                "The image {target} has no description (alt text) for screen readers."
+            )));
         }
         if !image || target.contains("://") || target.starts_with("data:") || target.is_empty() {
             continue;
         }
         // An image of the site's: in its images folder, or beside the post.
         let file = match target.strip_prefix(images_url.trim_end_matches('/')) {
-            Some(rest) if target.starts_with('/') => Path::new(project_path).join(&images_dir).join(rest.trim_start_matches('/')),
+            Some(rest) if target.starts_with('/') => Path::new(project_path)
+                .join(&images_dir)
+                .join(rest.trim_start_matches('/')),
             _ if target.starts_with('/') => continue,
-            _ => post.path.parent().unwrap_or(Path::new(project_path)).join(&target),
+            _ => post
+                .path
+                .parent()
+                .unwrap_or(Path::new(project_path))
+                .join(&target),
         };
-        let file = file.to_string_lossy().split(['?', '#']).next().unwrap_or_default().to_string();
+        let file = file
+            .to_string_lossy()
+            .split(['?', '#'])
+            .next()
+            .unwrap_or_default()
+            .to_string();
         if !Path::new(&file).is_file() {
-            issues.push(Issue::problem(format!("The image {target} isn't in the site.")));
+            issues.push(Issue::problem(format!(
+                "The image {target} isn't in the site."
+            )));
         }
     }
 
@@ -177,7 +210,10 @@ pub fn check(post: &Post, project_path: &str, cfg: &ProjectConfig) -> Vec<Issue>
 
 /// Only what holds publishing back.
 pub fn problems(issues: &[Issue]) -> Vec<&Issue> {
-    issues.iter().filter(|i| i.level == Level::Problem).collect()
+    issues
+        .iter()
+        .filter(|i| i.level == Level::Problem)
+        .collect()
 }
 
 /// The post's links to other sites that don't answer, or answer with an error. On the internet:
@@ -185,10 +221,18 @@ pub fn problems(issues: &[Issue]) -> Vec<&Issue> {
 pub async fn broken_links(body: &str) -> Vec<Issue> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent(concat!("PublishKit/", env!("CARGO_PKG_VERSION"), " (link check)"))
+        .user_agent(concat!(
+            "PublishKit/",
+            env!("CARGO_PKG_VERSION"),
+            " (link check)"
+        ))
         .build()
         .unwrap_or_default();
-    let mut targets: Vec<String> = links(body).into_iter().map(|(_, _, t)| t).filter(|t| t.starts_with("http")).collect();
+    let mut targets: Vec<String> = links(body)
+        .into_iter()
+        .map(|(_, _, t)| t)
+        .filter(|t| t.starts_with("http"))
+        .collect();
     targets.sort();
     targets.dedup();
     let checks = targets.into_iter().map(|url| {
@@ -207,13 +251,17 @@ pub async fn broken_links(body: &str) -> Vec<Issue> {
             }
         }
     });
-    futures_join_all(checks).await.into_iter().flatten().collect()
+    futures_join_all(checks)
+        .await
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 /// Runs the futures side by side, keeping their order.
-async fn futures_join_all<F: std::future::Future>(futures: impl IntoIterator<Item = F>) -> Vec<F::Output>
+async fn futures_join_all<F>(futures: impl IntoIterator<Item = F>) -> Vec<F::Output>
 where
-    F: Send + 'static,
+    F: std::future::Future + Send + 'static,
     F::Output: Send + 'static,
 {
     let handles: Vec<_> = futures.into_iter().map(tokio::spawn).collect();
@@ -269,7 +317,10 @@ mod tests {
         std::fs::create_dir_all(root.join("public/images/blog")).unwrap();
         std::fs::write(root.join("public/images/blog/here.png"), "").unwrap();
         let project = root.to_string_lossy().into_owned();
-        let cfg = ProjectConfig { preset: Some(crate::state::Preset::PublishKit), ..Default::default() };
+        let cfg = ProjectConfig {
+            preset: Some(crate::state::Preset::PublishKit),
+            ..Default::default()
+        };
         let content = "---\ntitle: \"A\"\n---\n\n# A\n\n#### Deep\n\nTODO: finish. A mastodon todolist is fine.\n\n\
                        ![](/images/blog/here.png) ![x](/images/blog/gone.png)\n\n```\nlet todo = 1;\n```";
         let issues = check(&post(&root, content), &project, &cfg);
@@ -277,9 +328,15 @@ mod tests {
         assert_eq!(problems(&issues).len(), 2, "{messages:#?}");
         assert!(messages.contains(&"It still says “TODO”."));
         assert!(messages.contains(&"The image /images/blog/gone.png isn't in the site."));
-        assert!(messages.iter().any(|m| m.contains("jumps from a level-1 heading to level 4")));
-        assert!(messages.iter().any(|m| m.contains("/images/blog/here.png has no description")));
-        assert!(messages.iter().any(|m| m.starts_with("It has no description")));
+        assert!(messages
+            .iter()
+            .any(|m| m.contains("jumps from a level-1 heading to level 4")));
+        assert!(messages
+            .iter()
+            .any(|m| m.contains("/images/blog/here.png has no description")));
+        assert!(messages
+            .iter()
+            .any(|m| m.starts_with("It has no description")));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -292,6 +349,9 @@ mod tests {
             "---\ntitle: \"A good title\"\ndescription: \"{}\"\n---\n\n## One\n\n{words}\n\n### Two\n\n[a](https://x.org)",
             "d".repeat(80)
         );
-        assert_eq!(check(&post(&root, &content), &root.to_string_lossy(), &cfg), []);
+        assert_eq!(
+            check(&post(&root, &content), &root.to_string_lossy(), &cfg),
+            []
+        );
     }
 }

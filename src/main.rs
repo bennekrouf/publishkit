@@ -5,25 +5,31 @@ mod crosspost;
 mod editor;
 mod feedback;
 mod frontmatter;
+mod kit;
 mod licence;
 mod mcp;
 mod plan;
 mod pro;
-mod state;
 mod screens;
 mod social;
-mod views;
+mod state;
 mod telemetry;
+mod views;
 
-use dioxus::prelude::*;
+use licence::StatusExt;
 use screens::App;
 
 /// The native title bar, as in every mayorana app: name, version and licence.
 pub fn window_title(status: &licence::Status) -> String {
-    format!("PublishKit {}{}", env!("CARGO_PKG_VERSION"), status.title_badge())
+    format!(
+        "PublishKit {}{}",
+        env!("CARGO_PKG_VERSION"),
+        status.title_badge()
+    )
 }
 
 fn main() {
+    kit::init();
     // `publishkit mcp`: the posts over stdio for an MCP client, and no window. Before the log
     // is set up: it writes to stdout, which there is the protocol.
     if std::env::args().nth(1).as_deref() == Some("mcp") {
@@ -40,14 +46,13 @@ fn main() {
 
     dioxus::LaunchBuilder::new()
         .with_cfg(
-            window_icon(dioxus::desktop::Config::new())
-                .with_window(
-                    dioxus::desktop::WindowBuilder::new()
-                        // Name, version and licence, as in every mayorana app.
-                        .with_title(window_title(&licence::current()))
-                        .with_inner_size(dioxus::desktop::LogicalSize::new(1280.0, 800.0))
-                        .with_min_inner_size(dioxus::desktop::LogicalSize::new(900.0, 600.0)),
-                )
+            window_icon(dioxus::desktop::Config::new()).with_window(
+                dioxus::desktop::WindowBuilder::new()
+                    // Name, version and licence, as in every mayorana app.
+                    .with_title(window_title(&licence::current()))
+                    .with_inner_size(dioxus::desktop::LogicalSize::new(1280.0, 800.0))
+                    .with_min_inner_size(dioxus::desktop::LogicalSize::new(900.0, 600.0)),
+            ),
         )
         .launch(App);
 }
@@ -60,7 +65,10 @@ fn publish_due_cli() -> i32 {
         Some(folder) => vec![folder.to_string()],
         None => state::AppConfig::load().project_path.into_iter().collect(),
     };
-    let projects: Vec<String> = projects.into_iter().filter(|p| std::path::Path::new(p).is_dir()).collect();
+    let projects: Vec<String> = projects
+        .into_iter()
+        .filter(|p| std::path::Path::new(p).is_dir())
+        .collect();
     if projects.is_empty() {
         eprintln!("publishkit publish-due: give the site's folder or --all, or open a site in PublishKit first");
         return 2;
@@ -68,7 +76,11 @@ fn publish_due_cli() -> i32 {
     let several = projects.len() > 1;
     let mut failed = false;
     for project in projects {
-        let site = if several { format!("{}: ", state::site_label(&project)) } else { String::new() };
+        let site = if several {
+            format!("{}: ", state::site_label(&project))
+        } else {
+            String::new()
+        };
         for (post, result) in api::publish_due(&project) {
             match result {
                 Ok(published) => {
@@ -92,7 +104,9 @@ fn window_icon(config: dioxus::desktop::Config) -> dioxus::desktop::Config {
     #[cfg(target_os = "linux")]
     {
         let png = include_bytes!("../assets/icon-256.png");
-        if let Ok(icon) = dioxus::desktop::icon_from_memory::<dioxus::desktop::tao::window::Icon>(png) {
+        if let Ok(icon) =
+            dioxus::desktop::icon_from_memory::<dioxus::desktop::tao::window::Icon>(png)
+        {
             return config.with_icon(icon);
         }
     }

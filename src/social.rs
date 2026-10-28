@@ -14,12 +14,18 @@ impl Network {
     pub const ALL: [Network; 2] = [Network::Bluesky, Network::Mastodon];
 
     pub fn label(self) -> &'static str {
-        match self { Network::Bluesky => "Bluesky", Network::Mastodon => "Mastodon" }
+        match self {
+            Network::Bluesky => "Bluesky",
+            Network::Mastodon => "Mastodon",
+        }
     }
 
     /// The longest post the network takes, in characters.
     pub fn limit(self) -> usize {
-        match self { Network::Bluesky => 300, Network::Mastodon => 500 }
+        match self {
+            Network::Bluesky => 300,
+            Network::Mastodon => 500,
+        }
     }
 
     pub fn configured(self, accounts: &Accounts) -> bool {
@@ -75,7 +81,11 @@ async fn json_of(response: reqwest::Response) -> Result<Value> {
 /// `https://bsky.social`, or the person's own server.
 fn bluesky_service(accounts: &Accounts) -> String {
     let service = accounts.bluesky_service.trim().trim_end_matches('/');
-    if service.is_empty() { "https://bsky.social".into() } else { service.to_string() }
+    if service.is_empty() {
+        "https://bsky.social".into()
+    } else {
+        service.to_string()
+    }
 }
 
 /// Posts `text` and gives the post's address.
@@ -86,10 +96,17 @@ pub async fn post(network: Network, accounts: &Accounts, text: &str) -> Result<S
     }
     let length = text.chars().count();
     if length > network.limit() {
-        bail!("the teaser is {length} characters; {} takes {}", network.label(), network.limit());
+        bail!(
+            "the teaser is {length} characters; {} takes {}",
+            network.label(),
+            network.limit()
+        );
     }
     if !network.configured(accounts) {
-        bail!("{} isn't set up: add the account in ⚙ Settings", network.label());
+        bail!(
+            "{} isn't set up: add the account in ⚙ Settings",
+            network.label()
+        );
     }
     let client = client()?;
     match network {
@@ -105,8 +122,12 @@ pub async fn post(network: Network, accounts: &Accounts, text: &str) -> Result<S
                     .context("Bluesky couldn't be reached")?,
             )
             .await?;
-            let token = session["accessJwt"].as_str().context("Bluesky gave no session")?;
-            let did = session["did"].as_str().context("Bluesky gave no account id")?;
+            let token = session["accessJwt"]
+                .as_str()
+                .context("Bluesky gave no session")?;
+            let did = session["did"]
+                .as_str()
+                .context("Bluesky gave no account id")?;
             let record = json!({
                 "$type": "app.bsky.feed.post",
                 "text": text,
@@ -129,7 +150,11 @@ pub async fn post(network: Network, accounts: &Accounts, text: &str) -> Result<S
         }
         Network::Mastodon => {
             let instance = accounts.mastodon_instance.trim().trim_end_matches('/');
-            let instance = if instance.starts_with("http") { instance.to_string() } else { format!("https://{instance}") };
+            let instance = if instance.starts_with("http") {
+                instance.to_string()
+            } else {
+                format!("https://{instance}")
+            };
             let posted = json_of(
                 client
                     .post(format!("{instance}/api/v1/statuses"))
@@ -154,10 +179,18 @@ mod tests {
         let text = "Lisez l’article — https://site.org/fr/blog/été. Et https://a.b/c?d=1";
         let facets = link_facets(text);
         assert_eq!(facets.len(), 2);
-        let range = |f: &Value| (f["index"]["byteStart"].as_u64().unwrap() as usize, f["index"]["byteEnd"].as_u64().unwrap() as usize);
+        let range = |f: &Value| {
+            (
+                f["index"]["byteStart"].as_u64().unwrap() as usize,
+                f["index"]["byteEnd"].as_u64().unwrap() as usize,
+            )
+        };
         let (s, e) = range(&facets[0]);
         assert_eq!(&text[s..e], "https://site.org/fr/blog/été");
-        assert_eq!(facets[0]["features"][0]["uri"], "https://site.org/fr/blog/été");
+        assert_eq!(
+            facets[0]["features"][0]["uri"],
+            "https://site.org/fr/blog/été"
+        );
         let (s, e) = range(&facets[1]);
         assert_eq!(&text[s..e], "https://a.b/c?d=1");
         assert!(link_facets("no httpaddress here").is_empty());
@@ -167,8 +200,16 @@ mod tests {
     async fn a_teaser_too_long_or_without_an_account_is_refused_before_sending() {
         let accounts = Accounts::default();
         let long = "x".repeat(301);
-        assert!(post(Network::Bluesky, &accounts, &long).await.unwrap_err().to_string().contains("301 characters"));
-        assert!(post(Network::Mastodon, &accounts, "Hello").await.unwrap_err().to_string().contains("isn't set up"));
+        assert!(post(Network::Bluesky, &accounts, &long)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("301 characters"));
+        assert!(post(Network::Mastodon, &accounts, "Hello")
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("isn't set up"));
         assert!(post(Network::Mastodon, &accounts, "  ").await.is_err());
     }
 }

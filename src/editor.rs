@@ -48,13 +48,24 @@ fn compose(base: &str, loaded: &Meta, meta: &Meta, body: &str, default: Format) 
         out = frontmatter::set(&out, "title", &text(&meta.title), format);
     }
     if meta.description != loaded.description {
-        out = frontmatter::set(&out, api::description_key(base), &text(&meta.description), format);
+        out = frontmatter::set(
+            &out,
+            api::description_key(base),
+            &text(&meta.description),
+            format,
+        );
     }
     if meta.date != loaded.date {
         out = frontmatter::set(&out, "date", &text(&meta.date), format);
     }
     if meta.tags != loaded.tags {
-        let tags = meta.tags.split(',').map(str::trim).filter(|t| !t.is_empty()).map(String::from).collect();
+        let tags = meta
+            .tags
+            .split(',')
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(String::from)
+            .collect();
         out = frontmatter::set(&out, "tags", &Field::List(tags), format);
     }
     frontmatter::with_body(&out, body)
@@ -163,15 +174,15 @@ pub fn PostEditor(
     selected: Signal<Option<Post>>,
 ) -> Element {
     let mut loaded_path = use_signal(|| None::<PathBuf>);
-    let mut base        = use_signal(String::new);
-    let mut loaded      = use_signal(Meta::default);
-    let mut meta        = use_signal(Meta::default);
-    let mut body        = use_signal(String::new);
+    let mut base = use_signal(String::new);
+    let mut loaded = use_signal(Meta::default);
+    let mut meta = use_signal(Meta::default);
+    let mut body = use_signal(String::new);
     // Edits made, and how many of them are on disk.
-    let mut edits       = use_signal(|| 0u64);
-    let mut saved       = use_signal(|| 0u64);
-    let mut status      = use_signal(String::new);
-    let mut busy        = use_signal(|| false);
+    let mut edits = use_signal(|| 0u64);
+    let mut saved = use_signal(|| 0u64);
+    let mut status = use_signal(String::new);
+    let mut busy = use_signal(|| false);
     let mut link_issues = use_signal(Vec::<String>::new);
     let mut sending = use_signal(|| None::<crate::crosspost::Target>);
     let mut checking_links = use_signal(|| false);
@@ -179,10 +190,18 @@ pub fn PostEditor(
     let project = move || config.peek().project_path.clone().unwrap_or_default();
 
     let mut save = move || {
-        let Some(path) = loaded_path.peek().clone() else { return };
+        let Some(path) = loaded_path.peek().clone() else {
+            return;
+        };
         let project = project();
         let pcfg = ProjectConfig::load(&project);
-        let content = compose(&base.peek(), &loaded.peek(), &meta.peek(), &body.peek(), pcfg.front_matter);
+        let content = compose(
+            &base.peek(),
+            &loaded.peek(),
+            &meta.peek(),
+            &body.peek(),
+            pcfg.front_matter,
+        );
         match std::fs::write(&path, &content) {
             Ok(()) => {
                 saved.set(*edits.peek());
@@ -195,7 +214,9 @@ pub fn PostEditor(
 
     // Another post picked: what is still unsaved of this one is saved, then that one loads.
     use_effect(move || {
-        let Some(post) = selected.read().clone() else { return };
+        let Some(post) = selected.read().clone() else {
+            return;
+        };
         if loaded_path.peek().as_ref() == Some(&post.path) {
             return;
         }
@@ -219,7 +240,13 @@ pub fn PostEditor(
         let n = *edits.peek() + 1;
         edits.set(n);
         let pcfg_format = ProjectConfig::load(&project()).front_matter;
-        let content = compose(&base.peek(), &loaded.peek(), &meta.peek(), &body.peek(), pcfg_format);
+        let content = compose(
+            &base.peek(),
+            &loaded.peek(),
+            &meta.peek(),
+            &body.peek(),
+            pcfg_format,
+        );
         let current = selected.peek().clone();
         if let Some(mut p) = current {
             p.full_content = content;
@@ -241,7 +268,10 @@ pub fn PostEditor(
         for path in paths {
             match api::add_image(&project, &pcfg, &path, &post) {
                 Ok(url) => {
-                    let alt = path.file_stem().map(|s| s.to_string_lossy().replace(['-', '_'], " ")).unwrap_or_default();
+                    let alt = path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().replace(['-', '_'], " "))
+                        .unwrap_or_default();
                     insert_block(&format!("![{alt}]({url})"));
                     status.set(format!("Added {url}"));
                 }
@@ -263,13 +293,25 @@ pub fn PostEditor(
                 }
             };
             use base64::Engine;
-            let Some(bytes) = pasted["data"].as_str().and_then(|d| base64::engine::general_purpose::STANDARD.decode(d).ok()) else { continue };
+            let Some(bytes) = pasted["data"]
+                .as_str()
+                .and_then(|d| base64::engine::general_purpose::STANDARD.decode(d).ok())
+            else {
+                continue;
+            };
             let extension = match pasted["type"].as_str().unwrap_or("") {
-                "image/jpeg" => "jpg", "image/gif" => "gif", "image/webp" => "webp", "image/svg+xml" => "svg", _ => "png",
+                "image/jpeg" => "jpg",
+                "image/gif" => "gif",
+                "image/webp" => "webp",
+                "image/svg+xml" => "svg",
+                _ => "png",
             };
             let dir = std::env::temp_dir().join("publishkit-pasted");
             let _ = std::fs::create_dir_all(&dir);
-            let file = dir.join(format!("pasted-{}.{extension}", chrono::Local::now().format("%Y%m%d-%H%M%S")));
+            let file = dir.join(format!(
+                "pasted-{}.{extension}",
+                chrono::Local::now().format("%Y%m%d-%H%M%S")
+            ));
             match std::fs::write(&file, bytes) {
                 Ok(()) => add_images(vec![file]),
                 Err(e) => status.set(format!("Couldn't keep the pasted image: {e}")),
@@ -279,20 +321,44 @@ pub fn PostEditor(
 
     let words = body.read().split_whitespace().count();
     let minutes = words.div_ceil(WORDS_PER_MINUTE).max(1);
-    let post_lang = selected.read().as_ref().map(|p| p.lang.clone()).unwrap_or_default();
-    let others: Vec<String> = posts.read().languages.iter().filter(|l| **l != post_lang).cloned().collect();
+    let post_lang = selected
+        .read()
+        .as_ref()
+        .map(|p| p.lang.clone())
+        .unwrap_or_default();
+    let others: Vec<String> = posts
+        .read()
+        .languages
+        .iter()
+        .filter(|l| **l != post_lang)
+        .cloned()
+        .collect();
     let unsaved = *edits.read() > *saved.read();
-    let issues = selected.read().as_ref().map(|post| {
-        let project = project();
-        crate::checks::check(post, &project, &ProjectConfig::load(&project))
-    }).unwrap_or_default();
+    let issues = selected
+        .read()
+        .as_ref()
+        .map(|post| {
+            let project = project();
+            crate::checks::check(post, &project, &ProjectConfig::load(&project))
+        })
+        .unwrap_or_default();
     let draft = selected.read().as_ref().is_some_and(|p| p.is_draft());
-    let stage = selected.read().as_ref().map(|p| p.stage).unwrap_or_default();
-    let publish_at = selected.read().as_ref().and_then(|p| p.publish_at.clone()).unwrap_or_default();
+    let stage = selected
+        .read()
+        .as_ref()
+        .map(|p| p.stage)
+        .unwrap_or_default();
+    let publish_at = selected
+        .read()
+        .as_ref()
+        .and_then(|p| p.publish_at.clone())
+        .unwrap_or_default();
 
     // A draft's stage and date live in the site's plan, not in its file: saved at once.
     let mut plan_change = move |change: Box<dyn FnOnce(&mut plan::Entry)>| {
-        let Some(post) = selected.peek().clone() else { return };
+        let Some(post) = selected.peek().clone() else {
+            return;
+        };
         let project = project();
         if let Err(e) = plan::update(&project, &post.lang, &post.filename, change) {
             status.set(format!("Couldn't save the schedule: {e}"));
@@ -619,7 +685,11 @@ mod tests {
         let same = compose(base, &loaded, &loaded, "New body", Format::Yaml);
         assert_eq!(same, base.replace("Old body", "New body"));
 
-        let meta = Meta { description: "Shorter.".into(), tags: "x, y".into(), ..loaded.clone() };
+        let meta = Meta {
+            description: "Shorter.".into(),
+            tags: "x, y".into(),
+            ..loaded.clone()
+        };
         let out = compose(base, &loaded, &meta, "Old body", Format::Yaml);
         assert_eq!(out, "---\ntitle: \"A\"\nexcerpt: \"Shorter.\"\ndate: '2026-01-01'\ntags: [\"x\", \"y\"]\n---\n\nOld body");
     }

@@ -31,9 +31,21 @@ pub struct Region {
 
 /// In the order Settings shows them.
 pub const REGIONS: &[Region] = &[
-    Region { id: "europe", label: "Europe", display: "api0 · Europe" },
-    Region { id: "china", label: "China", display: "api0 · China" },
-    Region { id: "usa", label: "United States", display: "api0 · United States" },
+    Region {
+        id: "europe",
+        label: "Europe",
+        display: "api0 · Europe",
+    },
+    Region {
+        id: "china",
+        label: "China",
+        display: "api0 · China",
+    },
+    Region {
+        id: "usa",
+        label: "United States",
+        display: "api0 · United States",
+    },
 ];
 
 pub fn region(id: &str) -> Option<&'static Region> {
