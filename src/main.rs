@@ -5,25 +5,22 @@ mod crosspost;
 mod editor;
 mod frontmatter;
 mod kit;
-mod licence;
 mod mcp;
 mod plan;
 mod pro;
 mod screens;
 mod social;
 mod state;
-mod telemetry;
 mod views;
 
-use licence::StatusExt;
 use screens::App;
 
 /// The native title bar, as in every mayorana app: name, version and licence.
-pub fn window_title(status: &licence::Status) -> String {
+pub fn window_title(status: &desktop_kit::licence::Status) -> String {
     format!(
         "PublishKit {}{}",
         env!("CARGO_PKG_VERSION"),
-        status.title_badge()
+        desktop_kit::licence::title_badge(status)
     )
 }
 
@@ -48,7 +45,7 @@ fn main() {
             window_icon(dioxus::desktop::Config::new()).with_window(
                 dioxus::desktop::WindowBuilder::new()
                     // Name, version and licence, as in every mayorana app.
-                    .with_title(window_title(&licence::current()))
+                    .with_title(window_title(&desktop_kit::licence::current()))
                     .with_inner_size(dioxus::desktop::LogicalSize::new(1280.0, 800.0))
                     .with_min_inner_size(dioxus::desktop::LogicalSize::new(900.0, 600.0)),
             ),

@@ -57,7 +57,10 @@ fn a_jekyll_draft_moves_into_posts_with_the_date_in_its_name() {
     ]);
     let cfg = ProjectConfig::load(&project);
     let path = save_to_queue(&project, "Hello, World", "Sum", "en", "Body", &cfg).unwrap();
-    assert!(path.ends_with("_drafts/hello-world.md"), "{path}");
+    assert!(
+        Path::new(&path).ends_with("_drafts/hello-world.md"),
+        "{path}"
+    );
     let draft = std::fs::read_to_string(&path).unwrap();
     assert!(
         !draft.contains("# Hello") && draft.contains("status: \"draft\""),
@@ -213,7 +216,7 @@ fn a_bundle_is_written_published_and_deleted_as_a_folder() {
     cfg.bundles = true;
     let path = save_to_queue(&project, "New one", "s", "en", "Body", &cfg).unwrap();
     assert!(
-        path.ends_with("content/en/queue/new-one/index.md"),
+        Path::new(&path).ends_with("content/en/queue/new-one/index.md"),
         "{path}"
     );
     assert_eq!(
