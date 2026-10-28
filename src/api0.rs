@@ -19,38 +19,7 @@ pub const BASE_URL: &str = "https://gateway.api0.ai/v1";
 /// Read before the shared licence, for a number kept out of the apps.
 pub const KEY_ENV: &str = "API0_API_KEY";
 
-/// One of the AI regions api0 offers. Picking it sends its id as the model; api0 decides what
-/// runs there.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Region {
-    pub id: &'static str,
-    pub label: &'static str,
-    /// For the provider badge and the MCP overview.
-    pub display: &'static str,
-}
-
-/// In the order Settings shows them.
-pub const REGIONS: &[Region] = &[
-    Region {
-        id: "europe",
-        label: "Europe",
-        display: "api0 · Europe",
-    },
-    Region {
-        id: "china",
-        label: "China",
-        display: "api0 · China",
-    },
-    Region {
-        id: "usa",
-        label: "United States",
-        display: "api0 · United States",
-    },
-];
-
-pub fn region(id: &str) -> Option<&'static Region> {
-    REGIONS.iter().find(|r| r.id == id)
-}
+pub use desktop_kit::region::{find as region, Region, REGIONS};
 
 /// Tokens in a typical post: the brief, the prompt and 600–800 words back. Only for the
 /// estimate.
@@ -127,46 +96,6 @@ pub async fn regions() -> Result<Vec<RegionOffer>, String> {
         return Err(format!("api0 returned {status}: {msg}"));
     }
     Ok(parse_offers(&v))
-}
-
-/// A region's flag, drawn: Windows has no flag emoji and shows two letters instead.
-#[component]
-pub fn RegionFlag(id: &'static str) -> Element {
-    // A five-pointed star of radius 1 around the origin.
-    const STAR: &str = "0,-1 0.24,-0.32 0.95,-0.31 0.38,0.12 0.59,0.81 0,0.4 \
-                        -0.59,0.81 -0.38,0.12 -0.95,-0.31 -0.24,-0.32";
-    let flag = match id {
-        "europe" => rsx! {
-            rect { width: "30", height: "20", fill: "#003399" }
-            // Twelve stars on a circle, as dots: a star this small is a dot.
-            for i in 0..12 {
-                circle {
-                    cx: "{15.0 + 6.0 * (f64::from(i) * std::f64::consts::PI / 6.0).sin()}",
-                    cy: "{10.0 - 6.0 * (f64::from(i) * std::f64::consts::PI / 6.0).cos()}",
-                    r: "0.9",
-                    fill: "#FFCC00",
-                }
-            }
-        },
-        "china" => rsx! {
-            rect { width: "30", height: "20", fill: "#EE1C25" }
-            polygon { points: STAR, fill: "#FFFF00", transform: "translate(5 5) scale(3)" }
-            for (x, y) in [(10.0, 2.0), (12.0, 4.0), (12.0, 7.0), (10.0, 9.0)] {
-                polygon { points: STAR, fill: "#FFFF00", transform: "translate({x} {y})" }
-            }
-        },
-        "usa" => rsx! {
-            rect { width: "30", height: "20", fill: "#fff" }
-            for i in 0..7 {
-                rect { y: "{f64::from(i) * 40.0 / 13.0}", width: "30", height: "{20.0 / 13.0}", fill: "#B22234" }
-            }
-            rect { width: "12", height: "{140.0 / 13.0}", fill: "#3C3B6E" }
-        },
-        _ => rsx! { rect { width: "30", height: "20", fill: "#888" } },
-    };
-    rsx! {
-        svg { class: "region-flag", view_box: "0 0 30 20", "aria-hidden": "true", {flag} }
-    }
 }
 
 #[cfg(test)]

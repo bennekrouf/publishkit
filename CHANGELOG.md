@@ -15,6 +15,20 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- The bar across the top of the window now looks and works the same in every
+  mayorana app: the name and version on the left, and on the right Deploy, the
+  model, Settings, MCP, Feedback, the light/dark switch and the Pro badge in the
+  corner.
+- Settings is a named button instead of a gear, and the light/dark switch is an
+  icon like in the other apps.
+- The light or dark look now follows your system setting while PublishKit is
+  open, until you pick one with the switch.
+- Messages that name the model say "🇪🇺 Europe" instead of "api0 · Europe".
+
 ## [0.1.29] - 2026-10-28
 
 ### Changed

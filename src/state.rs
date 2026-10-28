@@ -148,7 +148,7 @@ impl Default for LlmProvider {
 
 impl LlmProvider {
     pub fn label(&self) -> &'static str {
-        self.region().map_or("api0", |r| r.display)
+        self.region().map_or("api0", |r| r.shown())
     }
     pub fn model(&self) -> &str {
         match self {

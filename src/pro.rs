@@ -1,6 +1,7 @@
 //! The PublishKit Pro window: what Pro is, the licence on this computer, and
 //! where to paste a licence number.
 
+use desktop_kit::ui::{ProBadge, ProLook};
 use dioxus::prelude::*;
 
 use crate::licence::{self, FreeError, Status};
@@ -37,33 +38,21 @@ fn open_url(url: &str) {
 pub fn ProButton() -> Element {
     let mut pro = use_context::<Pro>();
     let status = pro.status.read().clone();
-    let (label, class, title) = match &status {
-        Status::Pro(a) => (
-            "✦ PRO",
-            "btn-small pro-btn active",
-            format!("PublishKit Pro, {} plan for {}", a.plan.name, a.email),
+    let title = match &status {
+        Status::Pro(a) => format!("PublishKit Pro, {} plan for {}", a.plan.name, a.email),
+        Status::NotPro(a) if a.is_free() => format!(
+            "Free: {} AI credits left this month. Pro is the licence for commercial use",
+            a.credits.left
         ),
-        Status::NotPro(a) if a.is_free() => (
-            "Get Pro…",
-            "btn-small pro-btn",
-            format!(
-                "Free: {} AI credits left this month. Pro is the licence for commercial use",
-                a.credits.left
-            ),
-        ),
-        Status::NotPro(_) | Status::Offline(_) | Status::Unknown(_) => (
-            "✦ RENEW PRO",
-            "btn-small pro-btn renew",
-            "Your licence doesn't make this PublishKit Pro right now".to_owned(),
-        ),
-        Status::Free => (
-            "Get Pro…",
-            "btn-small pro-btn",
-            "Pro is the licence for commercial use, with AI credits each month".to_owned(),
-        ),
+        Status::NotPro(_) | Status::Offline(_) | Status::Unknown(_) => {
+            "Your licence doesn't make this PublishKit Pro right now".to_owned()
+        }
+        Status::Free => {
+            "Pro is the licence for commercial use, with AI credits each month".to_owned()
+        }
     };
     rsx! {
-        button { class, title, onclick: move |_| pro.open.set(true), "{label}" }
+        ProBadge { look: ProLook::of(&status), title, onclick: move |_| pro.open.set(true) }
     }
 }
 

@@ -8,7 +8,13 @@ fn a_region_is_saved_and_read_back() {
     };
     let back: AppConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
     assert_eq!(back.provider.region().map(|r| r.id), Some("china"));
-    assert_eq!(back.provider.label(), "api0 · China");
+    // Flag and name, as every app shows a region; the name alone on Windows.
+    let shown = if cfg!(windows) {
+        "China"
+    } else {
+        "🇨🇳 China"
+    };
+    assert_eq!(back.provider.label(), shown);
     assert_eq!(back.provider.model(), "china");
     // A config saved with a provider of its own key still reads, on the default region.
     cfg = serde_json::from_str(r#"{"project_path":"/site","provider":"Other","api_key":"k"}"#)
