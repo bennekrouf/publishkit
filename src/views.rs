@@ -44,13 +44,24 @@ pub fn Board(
     let languages = all.languages.clone();
     let multilingual = languages.len() > 1;
     let drafts: Vec<Post> = languages.iter().flat_map(|l| all.blog(l).queue).collect();
-    let mut published: Vec<Post> = languages.iter().flat_map(|l| all.blog(l).published).collect();
+    let mut published: Vec<Post> = languages
+        .iter()
+        .flat_map(|l| all.blog(l).published)
+        .collect();
     published.sort_by(|a, b| b.date.cmp(&a.date));
     published.truncate(BOARD_PUBLISHED);
-    let mut scheduled: Vec<Post> = drafts.iter().filter(|p| p.publish_at.is_some()).cloned().collect();
+    let mut scheduled: Vec<Post> = drafts
+        .iter()
+        .filter(|p| p.publish_at.is_some())
+        .cloned()
+        .collect();
     scheduled.sort_by_key(|p| p.publish_at.clone());
     let column = |stage: Stage| -> Vec<Post> {
-        drafts.iter().filter(|p| p.publish_at.is_none() && p.stage == stage).cloned().collect()
+        drafts
+            .iter()
+            .filter(|p| p.publish_at.is_none() && p.stage == stage)
+            .cloned()
+            .collect()
     };
 
     let mut add_idea = move || {
@@ -63,7 +74,10 @@ pub fn Board(
         let lang = crate::screens::shown_lang(&idea_lang.peek(), &pcfg.languages());
         match api::save_to_queue(&project, &title, "", &lang, "", &pcfg) {
             Ok(path) => {
-                let filename = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let filename = std::path::Path::new(&path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
                 let _ = plan::update(&project, &lang, &filename, |e| e.stage = Stage::Idea);
                 idea.set(String::new());
                 posts.set(load_posts(&project));
@@ -73,10 +87,22 @@ pub fn Board(
     };
 
     let columns = [
-        ("Ideas", column(Stage::Idea), "Titles to write about. Add one above."),
+        (
+            "Ideas",
+            column(Stage::Idea),
+            "Titles to write about. Add one above.",
+        ),
         ("Drafts", column(Stage::Draft), "Being written."),
-        ("Review", column(Stage::Review), "Written, to read again before it goes out."),
-        ("Scheduled", scheduled, "Published automatically at their time. Set it in the editor."),
+        (
+            "Review",
+            column(Stage::Review),
+            "Written, to read again before it goes out.",
+        ),
+        (
+            "Scheduled",
+            scheduled,
+            "Published automatically at their time. Set it in the editor.",
+        ),
         ("Published", published, "The latest out."),
     ];
 
@@ -231,7 +257,11 @@ pub fn Calendar(
     for lang in &all.languages {
         let shelf = all.blog(lang);
         for post in shelf.published {
-            if let Some(day) = post.date.get(..10).and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()) {
+            if let Some(day) = post
+                .date
+                .get(..10)
+                .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+            {
                 by_day.entry(day).or_default().push((post, false));
             }
         }

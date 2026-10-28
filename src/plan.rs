@@ -22,11 +22,19 @@ impl Stage {
     pub const ALL: [Stage; 3] = [Stage::Idea, Stage::Draft, Stage::Review];
 
     pub fn label(self) -> &'static str {
-        match self { Stage::Idea => "Idea", Stage::Draft => "Draft", Stage::Review => "Review" }
+        match self {
+            Stage::Idea => "Idea",
+            Stage::Draft => "Draft",
+            Stage::Review => "Review",
+        }
     }
 
     pub fn key(self) -> &'static str {
-        match self { Stage::Idea => "idea", Stage::Draft => "draft", Stage::Review => "review" }
+        match self {
+            Stage::Idea => "idea",
+            Stage::Draft => "draft",
+            Stage::Review => "review",
+        }
     }
 
     pub fn from_key(key: &str) -> Option<Stage> {
@@ -54,7 +62,9 @@ pub struct Plan {
 }
 
 fn path(project_path: &str) -> PathBuf {
-    Path::new(project_path).join(".publishkit").join("plan.json")
+    Path::new(project_path)
+        .join(".publishkit")
+        .join("plan.json")
 }
 
 fn key(lang: &str, filename: &str) -> String {
@@ -67,7 +77,11 @@ pub fn parse_when(text: &str) -> Option<chrono::NaiveDateTime> {
     ["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"]
         .iter()
         .find_map(|f| chrono::NaiveDateTime::parse_from_str(text, f).ok())
-        .or_else(|| chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").ok().and_then(|d| d.and_hms_opt(0, 0, 0)))
+        .or_else(|| {
+            chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
+                .ok()
+                .and_then(|d| d.and_hms_opt(0, 0, 0))
+        })
 }
 
 /// The way `publish_at` is stored, and an `<input type="datetime-local">` takes it.
@@ -95,7 +109,10 @@ impl Plan {
     }
 
     pub fn get(&self, lang: &str, filename: &str) -> Entry {
-        self.drafts.get(&key(lang, filename)).cloned().unwrap_or_default()
+        self.drafts
+            .get(&key(lang, filename))
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Sets a draft's entry; one with nothing to say is dropped.
@@ -128,7 +145,12 @@ impl Plan {
 }
 
 /// Changes one draft's entry in the site's plan, on disk.
-pub fn update(project_path: &str, lang: &str, filename: &str, change: impl FnOnce(&mut Entry)) -> std::io::Result<()> {
+pub fn update(
+    project_path: &str,
+    lang: &str,
+    filename: &str,
+    change: impl FnOnce(&mut Entry),
+) -> std::io::Result<()> {
     let mut plan = Plan::load(project_path);
     let mut entry = plan.get(lang, filename);
     change(&mut entry);
@@ -152,22 +174,41 @@ mod tests {
     #[test]
     fn entries_with_nothing_to_say_are_not_kept() {
         let mut plan = Plan::default();
-        plan.set("en", "a.md", Entry { stage: Stage::Review, publish_at: None });
+        plan.set(
+            "en",
+            "a.md",
+            Entry {
+                stage: Stage::Review,
+                publish_at: None,
+            },
+        );
         plan.set("en", "b.md", Entry::default());
         assert_eq!(plan.drafts.len(), 1);
-        assert_eq!(serde_json::to_string(&plan).unwrap(), r#"{"drafts":{"en/a.md":{"stage":"review"}}}"#);
+        assert_eq!(
+            serde_json::to_string(&plan).unwrap(),
+            r#"{"drafts":{"en/a.md":{"stage":"review"}}}"#
+        );
         assert_eq!(plan.get("en", "b.md").stage, Stage::Draft);
     }
 
     #[test]
     fn what_is_due_comes_earliest_first() {
         let mut plan = Plan::default();
-        let at = |s: &str| Entry { publish_at: Some(s.into()), ..Default::default() };
+        let at = |s: &str| Entry {
+            publish_at: Some(s.into()),
+            ..Default::default()
+        };
         plan.set("fr", "late.md", at("2026-11-02T10:00"));
         plan.set("en", "early.md", at("2026-11-02 09:00"));
         plan.set("en", "future.md", at("2026-12-01"));
         plan.set("en", "garbled.md", at("next tuesday"));
         let now = parse_when("2026-11-02T10:00").unwrap();
-        assert_eq!(plan.due(now), [("en".to_string(), "early.md".to_string()), ("fr".into(), "late.md".into())]);
+        assert_eq!(
+            plan.due(now),
+            [
+                ("en".to_string(), "early.md".to_string()),
+                ("fr".into(), "late.md".into())
+            ]
+        );
     }
 }

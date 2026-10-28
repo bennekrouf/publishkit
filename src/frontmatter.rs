@@ -17,7 +17,10 @@ pub enum Format {
 
 impl Format {
     fn fence(self) -> &'static str {
-        match self { Format::Yaml => "---", Format::Toml => "+++" }
+        match self {
+            Format::Yaml => "---",
+            Format::Toml => "+++",
+        }
     }
 }
 
@@ -56,7 +59,11 @@ pub fn split(content: &str) -> Option<Parts<'_>> {
     let mut pos = start;
     for line in content[start..].split_inclusive('\n') {
         if line.trim_end() == fence {
-            return Some(Parts { format, block: &content[start..pos], body: &content[pos + line.len()..] });
+            return Some(Parts {
+                format,
+                block: &content[start..pos],
+                body: &content[pos + line.len()..],
+            });
         }
         pos += line.len();
     }
@@ -73,10 +80,16 @@ pub fn body(content: &str) -> &str {
 
 /// The front matter's fields as JSON values; TOML dates become their text.
 pub fn fields(content: &str) -> Map<String, Value> {
-    let Some(p) = split(content) else { return Map::new() };
+    let Some(p) = split(content) else {
+        return Map::new();
+    };
     let value = match p.format {
         Format::Yaml => serde_yaml::from_str::<Value>(p.block).ok(),
-        Format::Toml => p.block.parse::<toml::Table>().ok().map(|t| toml_to_json(toml::Value::Table(t))),
+        Format::Toml => p
+            .block
+            .parse::<toml::Table>()
+            .ok()
+            .map(|t| toml_to_json(toml::Value::Table(t))),
     };
     match value {
         Some(Value::Object(m)) => m,
@@ -92,7 +105,9 @@ fn toml_to_json(value: toml::Value) -> Value {
         toml::Value::Boolean(b) => Value::Bool(b),
         toml::Value::Datetime(d) => Value::String(d.to_string()),
         toml::Value::Array(a) => Value::Array(a.into_iter().map(toml_to_json).collect()),
-        toml::Value::Table(t) => Value::Object(t.into_iter().map(|(k, v)| (k, toml_to_json(v))).collect()),
+        toml::Value::Table(t) => {
+            Value::Object(t.into_iter().map(|(k, v)| (k, toml_to_json(v))).collect())
+        }
     }
 }
 
@@ -109,8 +124,16 @@ pub fn text(fields: &Map<String, Value>, key: &str) -> Option<String> {
 /// A list field, such as tags: a list, or one comma-separated string.
 pub fn list(fields: &Map<String, Value>, key: &str) -> Vec<String> {
     match fields.get(key) {
-        Some(Value::Array(a)) => a.iter().filter_map(|v| v.as_str().map(String::from)).collect(),
-        Some(Value::String(s)) => s.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect(),
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
+        Some(Value::String(s)) => s
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect(),
         _ => vec![],
     }
 }
@@ -130,7 +153,14 @@ fn render(format: Format, key: &str, value: &Field) -> String {
     let value = match value {
         Field::Text(s) => quote(s),
         Field::Bool(b) => b.to_string(),
-        Field::List(items) => format!("[{}]", items.iter().map(|s| quote(s)).collect::<Vec<_>>().join(", ")),
+        Field::List(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(|s| quote(s))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
     };
     match format {
         Format::Yaml => format!("{key}: {value}"),
@@ -180,7 +210,10 @@ fn edit(content: &str, key: &str, value: Option<&Field>, default: Format) -> Str
             if let Some(line) = new_line.as_deref() {
                 // TOML's top-level keys come before its first [table].
                 let at = match parts.format {
-                    Format::Toml => lines.iter().position(|l| l.trim_start().starts_with('[')).unwrap_or(lines.len()),
+                    Format::Toml => lines
+                        .iter()
+                        .position(|l| l.trim_start().starts_with('['))
+                        .unwrap_or(lines.len()),
                     Format::Yaml => lines.len(),
                 };
                 lines.insert(at, line);
@@ -205,7 +238,10 @@ fn key_lines(lines: &[&str], key: &str, format: Format) -> Option<(usize, usize)
             let from = lines.iter().position(|l| {
                 [key.to_string(), format!("\"{key}\""), format!("'{key}'")]
                     .iter()
-                    .any(|k| l.strip_prefix(k.as_str()).is_some_and(|rest| rest.starts_with(':')))
+                    .any(|k| {
+                        l.strip_prefix(k.as_str())
+                            .is_some_and(|rest| rest.starts_with(':'))
+                    })
             })?;
             // What follows a key, indented or as a `- item`, is its value; blank lines too
             // when more of it follows (a block scalar's paragraphs).
@@ -227,12 +263,18 @@ fn key_lines(lines: &[&str], key: &str, format: Format) -> Option<(usize, usize)
             Some((from, to))
         }
         Format::Toml => {
-            let table_start = lines.iter().position(|l| l.trim_start().starts_with('[')).unwrap_or(lines.len());
+            let table_start = lines
+                .iter()
+                .position(|l| l.trim_start().starts_with('['))
+                .unwrap_or(lines.len());
             let from = lines[..table_start].iter().position(|l| {
                 let l = l.trim_start();
                 [key.to_string(), format!("\"{key}\""), format!("'{key}'")]
                     .iter()
-                    .any(|k| l.strip_prefix(k.as_str()).is_some_and(|rest| rest.trim_start().starts_with('=')))
+                    .any(|k| {
+                        l.strip_prefix(k.as_str())
+                            .is_some_and(|rest| rest.trim_start().starts_with('='))
+                    })
             })?;
             // A value spans lines until it parses: a multi-line array or string.
             let mut to = from + 1;
@@ -275,19 +317,31 @@ mod tests {
     fn setting_a_key_keeps_everything_else() {
         let post = "---\n# a comment\ntitle: A\ntags:\n  - a\n  - b\ncustom: kept\n---\n\nBody\n";
         let out = set(post, "tags", &Field::List(vec!["c".into()]), Format::Yaml);
-        assert_eq!(out, "---\n# a comment\ntitle: A\ntags: [\"c\"]\ncustom: kept\n---\n\nBody\n");
+        assert_eq!(
+            out,
+            "---\n# a comment\ntitle: A\ntags: [\"c\"]\ncustom: kept\n---\n\nBody\n"
+        );
         let out = set(&out, "draft", &Field::Bool(false), Format::Yaml);
         assert!(out.contains("custom: kept\ndraft: false\n---"));
-        assert_eq!(edit(&out, "draft", None, Format::Yaml), "---\n# a comment\ntitle: A\ntags: [\"c\"]\ncustom: kept\n---\n\nBody\n");
+        assert_eq!(
+            edit(&out, "draft", None, Format::Yaml),
+            "---\n# a comment\ntitle: A\ntags: [\"c\"]\ncustom: kept\n---\n\nBody\n"
+        );
     }
 
     #[test]
     fn toml_keys_are_set_before_tables_and_across_lines() {
         let post = "+++\ntitle = \"A\"\ntags = [\n  \"a\",\n]\n[extra]\nx = 1\n+++\nBody";
         let out = set(post, "tags", &Field::List(vec![]), Format::Yaml);
-        assert_eq!(out, "+++\ntitle = \"A\"\ntags = []\n[extra]\nx = 1\n+++\nBody");
+        assert_eq!(
+            out,
+            "+++\ntitle = \"A\"\ntags = []\n[extra]\nx = 1\n+++\nBody"
+        );
         let out = set(&out, "draft", &Field::Bool(true), Format::Yaml);
-        assert_eq!(out, "+++\ntitle = \"A\"\ntags = []\ndraft = true\n[extra]\nx = 1\n+++\nBody");
+        assert_eq!(
+            out,
+            "+++\ntitle = \"A\"\ntags = []\ndraft = true\n[extra]\nx = 1\n+++\nBody"
+        );
         assert_eq!(flag(&fields(&out), "draft"), Some(true));
         assert_eq!(text(&fields(&out), "x"), None);
     }
@@ -297,7 +351,11 @@ mod tests {
         for format in [Format::Yaml, Format::Toml] {
             let title = "L'été \"chaud\" \\ : # no comment";
             let post = build(format, &[("title", Field::Text(title.into()))], "Body");
-            assert_eq!(text(&fields(&post), "title").as_deref(), Some(title), "{format:?}");
+            assert_eq!(
+                text(&fields(&post), "title").as_deref(),
+                Some(title),
+                "{format:?}"
+            );
         }
     }
 
@@ -311,7 +369,10 @@ mod tests {
 
     #[test]
     fn a_file_without_front_matter_gets_one() {
-        assert_eq!(set("Body", "title", &Field::Text("A".into()), Format::Toml), "+++\ntitle = \"A\"\n+++\n\nBody");
+        assert_eq!(
+            set("Body", "title", &Field::Text("A".into()), Format::Toml),
+            "+++\ntitle = \"A\"\n+++\n\nBody"
+        );
         assert!(split("--- not a fence\n---\n").is_none());
         assert!(split("---\nno end").is_none());
     }

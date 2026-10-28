@@ -74,7 +74,12 @@ pub enum Target {
 }
 
 impl Target {
-    pub const ALL: [Target; 4] = [Target::DevTo, Target::Hashnode, Target::WordPress, Target::Ghost];
+    pub const ALL: [Target; 4] = [
+        Target::DevTo,
+        Target::Hashnode,
+        Target::WordPress,
+        Target::Ghost,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -102,8 +107,14 @@ impl Target {
         let set = |s: &str| !s.trim().is_empty();
         match self {
             Target::DevTo => set(&accounts.devto_key),
-            Target::Hashnode => set(&accounts.hashnode_token) && set(&accounts.hashnode_publication),
-            Target::WordPress => set(&accounts.wordpress_url) && set(&accounts.wordpress_user) && set(&accounts.wordpress_password),
+            Target::Hashnode => {
+                set(&accounts.hashnode_token) && set(&accounts.hashnode_publication)
+            }
+            Target::WordPress => {
+                set(&accounts.wordpress_url)
+                    && set(&accounts.wordpress_user)
+                    && set(&accounts.wordpress_password)
+            }
             Target::Ghost => set(&accounts.ghost_url) && accounts.ghost_key.contains(':'),
         }
     }
@@ -124,21 +135,39 @@ pub struct Record {
 }
 
 fn record_path(project_path: &str) -> PathBuf {
-    Path::new(project_path).join(".publishkit").join("crossposts.json")
+    Path::new(project_path)
+        .join(".publishkit")
+        .join("crossposts.json")
 }
 
 impl Record {
     pub fn load(project_path: &str) -> Record {
-        std::fs::read_to_string(record_path(project_path)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+        std::fs::read_to_string(record_path(project_path))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
     }
 
     pub fn copies(&self, lang: &str, filename: &str) -> BTreeMap<Target, Copy> {
-        self.posts.get(&format!("{lang}/{filename}")).cloned().unwrap_or_default()
+        self.posts
+            .get(&format!("{lang}/{filename}"))
+            .cloned()
+            .unwrap_or_default()
     }
 
-    fn save_copy(project_path: &str, lang: &str, filename: &str, target: Target, copy: Copy) -> Result<()> {
+    fn save_copy(
+        project_path: &str,
+        lang: &str,
+        filename: &str,
+        target: Target,
+        copy: Copy,
+    ) -> Result<()> {
         let mut record = Record::load(project_path);
-        record.posts.entry(format!("{lang}/{filename}")).or_default().insert(target, copy);
+        record
+            .posts
+            .entry(format!("{lang}/{filename}"))
+            .or_default()
+            .insert(target, copy);
         let path = record_path(project_path);
         std::fs::create_dir_all(path.parent().unwrap_or(Path::new(project_path)))?;
         std::fs::write(path, serde_json::to_string_pretty(&record)?)?;
@@ -161,7 +190,8 @@ impl Article {
     pub fn of(content: &str, site_url: &str, canonical_url: &str) -> Article {
         let fields = frontmatter::fields(content);
         let title = frontmatter::text(&fields, "title").unwrap_or_default();
-        let description = frontmatter::text(&fields, crate::api::description_key(content)).unwrap_or_default();
+        let description =
+            frontmatter::text(&fields, crate::api::description_key(content)).unwrap_or_default();
         let mut body = frontmatter::body(content).to_string();
         // The platforms print the title themselves.
         if let Some(rest) = body.strip_prefix(&format!("# {title}")) {
@@ -171,12 +201,19 @@ impl Article {
         // A bundle's images sit beside it, linked by name: on the site, under its address.
         let base = canonical_url.trim_end_matches('/');
         for (_, _, target) in crate::checks::links(&markdown.clone()) {
-            let relative = !target.is_empty() && !target.contains(':') && !target.starts_with(['/', '#']);
+            let relative =
+                !target.is_empty() && !target.contains(':') && !target.starts_with(['/', '#']);
             if relative && !base.is_empty() {
                 markdown = markdown.replace(&format!("]({target}"), &format!("]({base}/{target}"));
             }
         }
-        Article { title, description, tags: frontmatter::list(&fields, "tags"), markdown, canonical_url: canonical_url.to_string() }
+        Article {
+            title,
+            description,
+            tags: frontmatter::list(&fields, "tags"),
+            markdown,
+            canonical_url: canonical_url.to_string(),
+        }
     }
 
     fn html(&self) -> String {
@@ -207,7 +244,12 @@ pub fn absolute_links(markdown: &str, site_url: &str) -> String {
 fn devto_tags(tags: &[String]) -> Vec<String> {
     let mut out: Vec<String> = tags
         .iter()
-        .map(|t| t.to_lowercase().chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>())
+        .map(|t| {
+            t.to_lowercase()
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect::<String>()
+        })
         .filter(|t| !t.is_empty())
         .collect();
     out.dedup();
@@ -251,13 +293,24 @@ pub fn devto_request(accounts: &Accounts, article: &Article, existing: Option<&C
     Request {
         method,
         url,
-        headers: vec![("api-key".into(), accounts.devto_key.trim().into()), ("accept".into(), "application/vnd.forem.api-v1+json".into())],
+        headers: vec![
+            ("api-key".into(), accounts.devto_key.trim().into()),
+            ("accept".into(), "application/vnd.forem.api-v1+json".into()),
+        ],
         body,
     }
 }
 
-pub fn hashnode_request(accounts: &Accounts, article: &Article, existing: Option<&Copy>) -> Request {
-    let tags: Vec<Value> = article.tags.iter().map(|t| json!({ "slug": slug(t), "name": t })).collect();
+pub fn hashnode_request(
+    accounts: &Accounts,
+    article: &Article,
+    existing: Option<&Copy>,
+) -> Request {
+    let tags: Vec<Value> = article
+        .tags
+        .iter()
+        .map(|t| json!({ "slug": slug(t), "name": t }))
+        .collect();
     let mut input = json!({
         "title": article.title,
         "contentMarkdown": article.markdown,
@@ -287,15 +340,25 @@ pub fn hashnode_request(accounts: &Accounts, article: &Article, existing: Option
     Request {
         method: "POST",
         url: "https://gql.hashnode.com".into(),
-        headers: vec![("Authorization".into(), accounts.hashnode_token.trim().into())],
+        headers: vec![(
+            "Authorization".into(),
+            accounts.hashnode_token.trim().into(),
+        )],
         body: json!({ "query": query, "variables": { "input": input } }),
     }
 }
 
-pub fn wordpress_request(accounts: &Accounts, article: &Article, existing: Option<&Copy>) -> Request {
+pub fn wordpress_request(
+    accounts: &Accounts,
+    article: &Article,
+    existing: Option<&Copy>,
+) -> Request {
     let site = accounts.wordpress_url.trim().trim_end_matches('/');
-    let credentials = base64::engine::general_purpose::STANDARD
-        .encode(format!("{}:{}", accounts.wordpress_user.trim(), accounts.wordpress_password.trim().replace(' ', "")));
+    let credentials = base64::engine::general_purpose::STANDARD.encode(format!(
+        "{}:{}",
+        accounts.wordpress_user.trim(),
+        accounts.wordpress_password.trim().replace(' ', "")
+    ));
     // WordPress has no canonical field of its own: the copy says where it first appeared.
     let content = format!(
         "{}\n<p><em>First published at <a href=\"{url}\">{url}</a>.</em></p>",
@@ -328,22 +391,41 @@ fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
         block[..key.len()].copy_from_slice(key);
     }
     let pad = |byte: u8| block.iter().map(|b| b ^ byte).collect::<Vec<u8>>();
-    let inner = Sha256::new().chain_update(pad(0x36)).chain_update(message).finalize();
-    Sha256::new().chain_update(pad(0x5c)).chain_update(inner).finalize().into()
+    let inner = Sha256::new()
+        .chain_update(pad(0x36))
+        .chain_update(message)
+        .finalize();
+    Sha256::new()
+        .chain_update(pad(0x5c))
+        .chain_update(inner)
+        .finalize()
+        .into()
 }
 
 /// The short-lived token Ghost's Admin API takes, signed with the integration's secret.
 pub fn ghost_token(key: &str, now: i64) -> Result<String> {
-    let (id, secret) = key.trim().split_once(':').context("a Ghost Admin API key is id:secret")?;
-    let secret = hex::decode(secret).context("the secret part of a Ghost Admin API key is hexadecimal")?;
+    let (id, secret) = key
+        .trim()
+        .split_once(':')
+        .context("a Ghost Admin API key is id:secret")?;
+    let secret =
+        hex::decode(secret).context("the secret part of a Ghost Admin API key is hexadecimal")?;
     let b64 = |v: &Value| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(v.to_string());
     let header = b64(&json!({ "alg": "HS256", "typ": "JWT", "kid": id }));
     let payload = b64(&json!({ "iat": now, "exp": now + 300, "aud": "/admin/" }));
     let signature = hmac_sha256(&secret, format!("{header}.{payload}").as_bytes());
-    Ok(format!("{header}.{payload}.{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature)))
+    Ok(format!(
+        "{header}.{payload}.{}",
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature)
+    ))
 }
 
-pub fn ghost_request(accounts: &Accounts, article: &Article, existing: Option<(&Copy, &str)>, now: i64) -> Result<Request> {
+pub fn ghost_request(
+    accounts: &Accounts,
+    article: &Article,
+    existing: Option<(&Copy, &str)>,
+    now: i64,
+) -> Result<Request> {
     let site = accounts.ghost_url.trim().trim_end_matches('/');
     let mut post = json!({
         "title": article.title,
@@ -356,14 +438,20 @@ pub fn ghost_request(accounts: &Accounts, article: &Article, existing: Option<(&
     let (method, url) = match existing {
         Some((copy, updated_at)) => {
             post["updated_at"] = json!(updated_at);
-            ("PUT", format!("{site}/ghost/api/admin/posts/{}/?source=html", copy.id))
+            (
+                "PUT",
+                format!("{site}/ghost/api/admin/posts/{}/?source=html", copy.id),
+            )
         }
         None => ("POST", format!("{site}/ghost/api/admin/posts/?source=html")),
     };
     Ok(Request {
         method,
         url,
-        headers: vec![("Authorization".into(), format!("Ghost {}", ghost_token(&accounts.ghost_key, now)?))],
+        headers: vec![(
+            "Authorization".into(),
+            format!("Ghost {}", ghost_token(&accounts.ghost_key, now)?),
+        )],
         body: json!({ "posts": [post] }),
     })
 }
@@ -380,7 +468,10 @@ async fn send(client: &reqwest::Client, request: &Request) -> Result<Value> {
     if request.method != "GET" {
         builder = builder.json(&request.body);
     }
-    let response = builder.send().await.with_context(|| format!("{} couldn't be reached", request.url))?;
+    let response = builder
+        .send()
+        .await
+        .with_context(|| format!("{} couldn't be reached", request.url))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -401,42 +492,85 @@ pub async fn crosspost(
     article: &Article,
 ) -> Result<Copy> {
     if !target.configured(accounts) {
-        bail!("{} isn't set up: add the account in ⚙ Settings → Cross-posting", target.label());
+        bail!(
+            "{} isn't set up: add the account in ⚙ Settings → Cross-posting",
+            target.label()
+        );
     }
-    let existing = Record::load(project_path).copies(lang, filename).get(&target).cloned();
+    let existing = Record::load(project_path)
+        .copies(lang, filename)
+        .get(&target)
+        .cloned();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .user_agent(concat!("PublishKit/", env!("CARGO_PKG_VERSION")))
         .build()?;
     let copy = match target {
         Target::DevTo => {
-            let answer = send(&client, &devto_request(accounts, article, existing.as_ref())).await?;
+            let answer = send(
+                &client,
+                &devto_request(accounts, article, existing.as_ref()),
+            )
+            .await?;
             Copy {
-                id: answer["id"].as_i64().map(|i| i.to_string()).context("dev.to gave no id")?,
-                url: answer["url"].as_str().unwrap_or("https://dev.to/dashboard").to_string(),
+                id: answer["id"]
+                    .as_i64()
+                    .map(|i| i.to_string())
+                    .context("dev.to gave no id")?,
+                url: answer["url"]
+                    .as_str()
+                    .unwrap_or("https://dev.to/dashboard")
+                    .to_string(),
             }
         }
         Target::Hashnode => {
-            let answer = send(&client, &hashnode_request(accounts, article, existing.as_ref())).await?;
+            let answer = send(
+                &client,
+                &hashnode_request(accounts, article, existing.as_ref()),
+            )
+            .await?;
             if let Some(errors) = answer["errors"].as_array().filter(|e| !e.is_empty()) {
-                let messages: Vec<&str> = errors.iter().filter_map(|e| e["message"].as_str()).collect();
+                let messages: Vec<&str> = errors
+                    .iter()
+                    .filter_map(|e| e["message"].as_str())
+                    .collect();
                 bail!("Hashnode: {}", messages.join("; "));
             }
-            let data = answer["data"].as_object().and_then(|d| d.values().next()).cloned().unwrap_or_default();
+            let data = answer["data"]
+                .as_object()
+                .and_then(|d| d.values().next())
+                .cloned()
+                .unwrap_or_default();
             if let Some(post) = data.get("post").filter(|p| p.is_object()) {
                 Copy {
-                    id: post["id"].as_str().context("Hashnode gave no id")?.to_string(),
+                    id: post["id"]
+                        .as_str()
+                        .context("Hashnode gave no id")?
+                        .to_string(),
                     url: post["url"].as_str().unwrap_or_default().to_string(),
                 }
             } else {
-                let id = data["draft"]["id"].as_str().context("Hashnode gave no id")?.to_string();
-                Copy { url: format!("https://hashnode.com/draft/{id}"), id }
+                let id = data["draft"]["id"]
+                    .as_str()
+                    .context("Hashnode gave no id")?
+                    .to_string();
+                Copy {
+                    url: format!("https://hashnode.com/draft/{id}"),
+                    id,
+                }
             }
         }
         Target::WordPress => {
-            let answer = send(&client, &wordpress_request(accounts, article, existing.as_ref())).await?;
+            let answer = send(
+                &client,
+                &wordpress_request(accounts, article, existing.as_ref()),
+            )
+            .await?;
             Copy {
-                id: answer["id"].as_i64().map(|i| i.to_string()).context("WordPress gave no id")?,
+                id: answer["id"]
+                    .as_i64()
+                    .map(|i| i.to_string())
+                    .context("WordPress gave no id")?,
                 url: answer["link"].as_str().unwrap_or_default().to_string(),
             }
         }
@@ -449,7 +583,10 @@ pub async fn crosspost(
                     let get = Request {
                         method: "GET",
                         url: format!("{site}/ghost/api/admin/posts/{}/", copy.id),
-                        headers: vec![("Authorization".into(), format!("Ghost {}", ghost_token(&accounts.ghost_key, now)?))],
+                        headers: vec![(
+                            "Authorization".into(),
+                            format!("Ghost {}", ghost_token(&accounts.ghost_key, now)?),
+                        )],
                         body: Value::Null,
                     };
                     let answer = send(&client, &get).await?;
@@ -471,135 +608,4 @@ pub async fn crosspost(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn article() -> Article {
-        let content = "---\ntitle: \"Hello, World\"\ndescription: \"Short.\"\ntags: [\"Rust\", \"web dev\", \"a\", \"b\", \"c\"]\n---\n\n\
-                       # Hello, World\n\nSee ![x](/images/x.png) and [home](/en/blog/other).";
-        Article::of(content, "https://site.org/", "https://site.org/en/blog/hello")
-    }
-
-    #[test]
-    fn the_copy_points_at_the_site_and_leaves_the_title_to_the_platform() {
-        let a = article();
-        assert_eq!(a.title, "Hello, World");
-        assert_eq!(a.markdown, "See ![x](https://site.org/images/x.png) and [home](https://site.org/en/blog/other).");
-        let bundle = Article::of("---\ntitle: B\n---\n![c](cover.png) [x](#top)", "https://site.org", "https://site.org/blog/b/");
-        assert_eq!(bundle.markdown, "![c](https://site.org/blog/b/cover.png) [x](#top)");
-        assert!(a.html().contains("src=\"https://site.org/images/x.png\""));
-    }
-
-    #[test]
-    fn dev_to_gets_four_plain_tags_and_the_canonical_address() {
-        let accounts = Accounts { devto_key: "k".into(), ..Default::default() };
-        let r = devto_request(&accounts, &article(), None);
-        assert_eq!((r.method, r.url.as_str()), ("POST", "https://dev.to/api/articles"));
-        assert_eq!(r.body["article"]["tags"], json!(["rust", "webdev", "a", "b"]));
-        assert_eq!(r.body["article"]["canonical_url"], "https://site.org/en/blog/hello");
-        assert_eq!(r.body["article"]["published"], false);
-        let again = devto_request(&accounts, &article(), Some(&Copy { id: "7".into(), url: String::new() }));
-        assert_eq!((again.method, again.url.as_str()), ("PUT", "https://dev.to/api/articles/7"));
-    }
-
-    #[test]
-    fn hashnode_drafts_then_updates_in_place() {
-        let accounts = Accounts { hashnode_token: "t".into(), hashnode_publication: "p1".into(), ..Default::default() };
-        let r = hashnode_request(&accounts, &article(), None);
-        assert!(r.body["query"].as_str().unwrap().contains("createDraft"));
-        assert_eq!(r.body["variables"]["input"]["publicationId"], "p1");
-        assert_eq!(r.body["variables"]["input"]["tags"][1], json!({ "slug": "web-dev", "name": "web dev" }));
-        let published = Copy { id: "abc".into(), url: "https://blog.x/hello".into() };
-        let r = hashnode_request(&accounts, &article(), Some(&published));
-        assert!(r.body["query"].as_str().unwrap().contains("updatePost"));
-        assert_eq!(r.body["variables"]["input"]["id"], "abc");
-    }
-
-    #[test]
-    fn wordpress_gets_html_with_a_link_to_the_original() {
-        let accounts = Accounts {
-            wordpress_url: "https://wp.org/".into(), wordpress_user: "me".into(), wordpress_password: "ab cd".into(),
-            as_draft: false, ..Default::default()
-        };
-        let r = wordpress_request(&accounts, &article(), None);
-        assert_eq!(r.url, "https://wp.org/wp-json/wp/v2/posts");
-        assert_eq!(r.headers[0].1, format!("Basic {}", base64::engine::general_purpose::STANDARD.encode("me:abcd")));
-        assert_eq!(r.body["status"], "publish");
-        assert!(r.body["content"].as_str().unwrap().ends_with("<a href=\"https://site.org/en/blog/hello\">https://site.org/en/blog/hello</a>.</em></p>"));
-    }
-
-    /// A WordPress that answers each request with the next id, and tells what it was asked.
-    async fn fake_wordpress() -> (String, tokio::sync::mpsc::UnboundedReceiver<String>) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = format!("http://{}", listener.local_addr().unwrap());
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        tokio::spawn(async move {
-            let mut id = 40;
-            loop {
-                let Ok((mut socket, _)) = listener.accept().await else { return };
-                let mut request = vec![0u8; 65536];
-                let mut read = 0;
-                // Headers, then as much body as Content-Length says.
-                loop {
-                    let n = socket.read(&mut request[read..]).await.unwrap_or(0);
-                    read += n;
-                    let text = String::from_utf8_lossy(&request[..read]).to_string();
-                    if let Some(end) = text.find("\r\n\r\n") {
-                        let length = text.lines()
-                            .find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
-                            .unwrap_or(0);
-                        if read >= end + 4 + length || n == 0 { break; }
-                    } else if n == 0 { break; }
-                }
-                id += 1;
-                let first_line = String::from_utf8_lossy(&request[..read]).lines().next().unwrap_or("").to_string();
-                let _ = tx.send(first_line);
-                let body = format!("{{\"id\": {id}, \"link\": \"https://wp.test/?p={id}\"}}");
-                let answer = format!("HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
-                let _ = socket.write_all(answer.as_bytes()).await;
-            }
-        });
-        (address, rx)
-    }
-
-    #[tokio::test]
-    async fn a_post_sent_twice_updates_its_copy() {
-        let (address, mut asked) = fake_wordpress().await;
-        let root = std::env::temp_dir().join(format!("publishkit-crosspost-{}", std::process::id()));
-        std::fs::create_dir_all(&root).unwrap();
-        let project = root.to_string_lossy().into_owned();
-        let accounts = Accounts { wordpress_url: address, wordpress_user: "me".into(), wordpress_password: "pw".into(), ..Default::default() };
-
-        let first = crosspost(&project, &accounts, Target::WordPress, "en", "hello.md", &article()).await.unwrap();
-        assert_eq!(first, Copy { id: "41".into(), url: "https://wp.test/?p=41".into() });
-        assert_eq!(asked.recv().await.unwrap(), "POST /wp-json/wp/v2/posts HTTP/1.1");
-        assert_eq!(Record::load(&project).copies("en", "hello.md")[&Target::WordPress], first);
-
-        crosspost(&project, &accounts, Target::WordPress, "en", "hello.md", &article()).await.unwrap();
-        assert_eq!(asked.recv().await.unwrap(), "POST /wp-json/wp/v2/posts/41 HTTP/1.1");
-        assert!(crosspost(&project, &Accounts::default(), Target::DevTo, "en", "hello.md", &article()).await.is_err());
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn hmac_matches_rfc_4231() {
-        let mac = hmac_sha256(b"Jefe", b"what do ya want for nothing?");
-        assert_eq!(hex::encode(mac), "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
-        let long_key = [0xaa_u8; 131];
-        let mac = hmac_sha256(&long_key, b"Test Using Larger Than Block-Size Key - Hash Key First");
-        assert_eq!(hex::encode(mac), "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54");
-    }
-
-    #[test]
-    fn a_ghost_token_is_signed_with_the_secret() {
-        let token = ghost_token("abc123:00ff", 1_700_000_000).unwrap();
-        let parts: Vec<&str> = token.split('.').collect();
-        assert_eq!(parts.len(), 3);
-        let header: Value = serde_json::from_slice(&base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(parts[0]).unwrap()).unwrap();
-        assert_eq!(header["kid"], "abc123");
-        let expected = hmac_sha256(&[0x00, 0xff], format!("{}.{}", parts[0], parts[1]).as_bytes());
-        assert_eq!(parts[2], base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(expected));
-        assert!(ghost_token("no-colon", 0).is_err());
-    }
-}
+mod tests;
