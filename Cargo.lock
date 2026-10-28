@@ -3882,7 +3882,7 @@ dependencies = [
 
 [[package]]
 name = "publishkit"
-version = "0.1.28"
+version = "0.1.29"
 dependencies = [
  "anyhow",
  "base64",
