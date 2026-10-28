@@ -295,6 +295,7 @@ mod tests {
             social: None,
             stage: Stage::Draft,
             publish_at: None,
+            when: None,
         }
     }
 

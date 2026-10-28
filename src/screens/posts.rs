@@ -131,7 +131,7 @@ pub(super) fn publish_now(
             let project = project.clone();
             move || {
                 let pcfg = ProjectConfig::load(&project);
-                api::publish_post(&project, &post.lang, &post.filename, &pcfg)
+                api::publish_post(&project, &post.lang, &post.filename, &pcfg, None)
             }
         })
         .await;

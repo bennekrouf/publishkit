@@ -1,5 +1,5 @@
 use crate::frontmatter::{self, Format};
-use crate::plan::{Plan, Stage};
+use crate::plan::{Plan, Stage, When};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -24,6 +24,10 @@ pub struct LinkedInPost {
     pub lang: String,
     pub status: String,
     pub date: String,
+    /// `date` read, with its time when the front matter gives one.
+    pub when: Option<When>,
+    /// When a queued post is planned to go out, from the site's plan: `2026-11-02T09:00`.
+    pub publish_at: Option<String>,
     pub body: String,
 }
 
@@ -35,6 +39,8 @@ pub struct Post {
     pub title: String,
     pub description: String,
     pub date: String,
+    /// `date` read, with its time when the front matter gives one.
+    pub when: Option<When>,
     /// The language whose folder the post is in.
     pub lang: String,
     /// `draft` while it waits to be published, `published` once it is.

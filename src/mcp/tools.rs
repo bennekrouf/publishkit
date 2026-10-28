@@ -9,6 +9,8 @@ pub(super) fn tools() -> Value {
     let kind =
         json!({ "type": "string", "enum": ["blog", "linkedin"], "description": "Default blog." });
     let place = json!({ "type": "string", "enum": ["queue", "published"], "description": "Default queue." });
+    let published_at = json!({ "type": "string", "description": "When it actually went out, for a post \
+        posted earlier and saved here after: 2026-10-16, or with the local time, 2026-10-16T09:00. Default now." });
     json!([
         {
             "name": "project",
@@ -97,14 +99,16 @@ pub(super) fn tools() -> Value {
         {
             "name": "publish_post",
             "description": "Publishes a draft: moves it into the blog (or LinkedIn's published folder), or clears its \
-                            draft mark where drafts sit with published posts, dates it today, and for a blog post \
-                            runs the site's publish command, if it has one. A blog post whose checks find problems \
-                            (no title or text, TODO left in, a missing image) is refused with them; get_post lists \
-                            its checks. Ask the user first.",
+                            draft mark where drafts sit with published posts, dates it today (or published_at), \
+                            and for a blog post runs the site's publish command, if it has one. A LinkedIn post is \
+                            only recorded as posted: PublishKit doesn't post to LinkedIn. A blog post whose checks \
+                            find problems (no title or text, TODO left in, a missing image) is refused with them; \
+                            get_post lists its checks. Ask the user first.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "project": project, "lang": lang, "filename": filename, "kind": kind,
+                    "published_at": published_at,
                     "force": { "type": "boolean", "description": "Publish a blog post although its checks found problems. Only when the user says so." },
                 },
                 "required": ["lang", "filename"],
@@ -115,11 +119,13 @@ pub(super) fn tools() -> Value {
             "description": "Sets a blog draft's stage on PublishKit's board (idea, draft or review) and when it is \
                             published by itself: publish_at, local time like 2026-11-02T09:00, or an empty string \
                             to unschedule. PublishKit publishes it then while its window is open, or when \
-                            `publishkit publish-due` runs. Ask the user before scheduling.",
+                            `publishkit publish-due` runs. With kind linkedin, publish_at only plans the draft on \
+                            the calendar: PublishKit can't post to LinkedIn, so the user posts it and it is then \
+                            recorded with publish_post. Ask the user before scheduling.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "project": project, "lang": lang, "filename": filename,
+                    "project": project, "lang": lang, "filename": filename, "kind": kind,
                     "stage": { "type": "string", "enum": ["idea", "draft", "review"] },
                     "publish_at": { "type": "string" },
                 },
@@ -150,9 +156,26 @@ pub(super) fn tools() -> Value {
             },
         },
         {
+            "name": "set_date",
+            "description": "Sets the date, and the time if given, of a post: published (default) or queued, blog \
+                            or LinkedIn. For a post that went out at another time than PublishKit recorded. The \
+                            calendar shows it there. A blog post's file name keeps its date prefix, if it has one. \
+                            Ask the user first for a published blog post: the site shows the date.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project": project, "lang": lang, "filename": filename, "kind": kind,
+                    "where": { "type": "string", "enum": ["queue", "published"], "description": "Default published." },
+                    "date": { "type": "string", "description": "2026-10-16, or with the local time, 2026-10-16T09:00." },
+                },
+                "required": ["lang", "filename", "date"],
+            },
+        },
+        {
             "name": "queue_linkedin",
             "description": "Adds a standalone LinkedIn post to a language's queue. Give body, or generate: true with an \
-                            angle to have PublishKit's model write it.",
+                            angle to have PublishKit's model write it. For a post already on LinkedIn, give \
+                            published_at and it is saved as posted on that date.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -162,6 +185,8 @@ pub(super) fn tools() -> Value {
                     "body": { "type": "string" },
                     "angle": { "type": "string", "description": "Key points, for generate." },
                     "generate": { "type": "boolean" },
+                    "published_at": { "type": "string", "description": "Already posted on LinkedIn: when, \
+                        2026-10-16 or 2026-10-16T09:00. The post is saved straight among the posted ones." },
                 },
                 "required": ["lang", "topic"],
             },

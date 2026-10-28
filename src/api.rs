@@ -1,4 +1,5 @@
 use crate::frontmatter::{self, Field, Format};
+use crate::plan::When;
 use crate::state::{language_name, Drafts, LlmProvider, ProjectConfig, SocialPosts};
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -64,11 +65,14 @@ pub fn save_linkedin_to_queue(
     Ok(path.to_string_lossy().to_string())
 }
 
+/// Moves a LinkedIn draft to the posted ones, dated `at` when it went out earlier (posted
+/// on LinkedIn first, saved here after), else today.
 pub fn publish_linkedin_post(
     project_path: &str,
     project_config: &ProjectConfig,
     lang: &str,
     filename: &str,
+    at: Option<When>,
 ) -> Result<()> {
     let (queue, published) = project_config.resolve_linkedin_paths(project_path, lang);
     let src = queue.join(filename);
@@ -82,10 +86,32 @@ pub fn publish_linkedin_post(
         &Field::Text("published".into()),
         Format::Yaml,
     );
-    let updated = frontmatter::set(&updated, "date", &Field::Text(today_like("")), Format::Yaml);
+    let date = at.map_or_else(|| today_like(""), |w| w.linkedin_date());
+    let updated = frontmatter::set(&updated, "date", &Field::Text(date), Format::Yaml);
 
+    if dst.exists() {
+        bail!("{} is already among the posted ones", dst.display());
+    }
     std::fs::write(&dst, updated)?;
     std::fs::remove_file(&src)?;
+    crate::plan::forget_linkedin(project_path, lang, filename);
+    Ok(())
+}
+
+/// Sets the date of a post, queued or published, blog or LinkedIn: written as that kind of
+/// post keeps it. A blog post's file name keeps its date prefix: links to it may use it.
+pub fn set_date(path: &Path, linkedin: bool, when: When, default: Format) -> Result<()> {
+    let content = std::fs::read_to_string(path).with_context(|| format!("{}", path.display()))?;
+    let format = frontmatter::split(&content).map_or(default, |p| p.format);
+    let date = if linkedin {
+        when.linkedin_date()
+    } else {
+        let previous =
+            frontmatter::text(&frontmatter::fields(&content), "date").unwrap_or_default();
+        when.blog_date(&previous)
+    };
+    let updated = frontmatter::set(&content, "date", &Field::Text(date), format);
+    std::fs::write(path, updated)?;
     Ok(())
 }
 
@@ -97,6 +123,7 @@ pub fn delete_linkedin_queued(
 ) -> Result<()> {
     let (queue, _) = project_config.resolve_linkedin_paths(project_path, lang);
     std::fs::remove_file(queue.join(filename))?;
+    crate::plan::forget_linkedin(project_path, lang, filename);
     Ok(())
 }
 
@@ -393,13 +420,15 @@ impl Published {
 }
 
 /// Publishes a draft. With a drafts folder it moves into the blog's; with `draft: true` it
-/// stays where it is and loses the mark. Either way it is dated today, then the site's
-/// publish command runs. The command failing doesn't undo the publishing: it is reported.
+/// stays where it is and loses the mark. Either way it is dated today, or `at` for a post that
+/// went out earlier, then the site's publish command runs. The command failing doesn't undo
+/// the publishing: it is reported.
 pub fn publish_post(
     project_path: &str,
     lang: &str,
     filename: &str,
     project_config: &ProjectConfig,
+    at: Option<When>,
 ) -> Result<Published> {
     let (queue_path, blog_path) = project_config.resolve_paths(project_path, lang);
     let src = queue_path.join(filename);
@@ -415,7 +444,8 @@ pub fn publish_post(
         updated = frontmatter::set(&updated, "draft", &Field::Bool(false), format);
     }
     let date = frontmatter::text(&fields, "date").unwrap_or_default();
-    updated = frontmatter::set(&updated, "date", &Field::Text(today_like(&date)), format);
+    let date = at.map_or_else(|| today_like(&date), |w| w.blog_date(&date));
+    updated = frontmatter::set(&updated, "date", &Field::Text(date), format);
 
     // A bundle moves as a whole, its images with it.
     if let Some(folder) = bundle_folder(&queue_path, filename) {
@@ -440,7 +470,8 @@ pub fn publish_post(
     let mut name = filename.to_string();
     if project_config.date_in_filename && !name.get(..11).is_some_and(crate::state::is_date_prefix)
     {
-        name = format!("{}-{name}", chrono::Local::now().format("%Y-%m-%d"));
+        let day = at.map_or_else(|| chrono::Local::now().date_naive(), |w| w.day);
+        name = format!("{}-{name}", day.format("%Y-%m-%d"));
     }
     std::fs::create_dir_all(&blog_path)?;
     let dst = blog_path.join(&name);
@@ -515,7 +546,7 @@ pub fn publish_due(project_path: &str) -> Vec<(String, Result<Published>)> {
                 continue;
             }
         }
-        let result = publish_post(project_path, &lang, &filename, &project_config);
+        let result = publish_post(project_path, &lang, &filename, &project_config, None);
         done.push((format!("{lang}/{filename}"), result));
     }
     done

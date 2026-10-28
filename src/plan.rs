@@ -4,6 +4,8 @@
 //! Kept in `.publishkit/plan.json` at the site's root rather than in the posts' front matter, so
 //! no framework's schema meets fields it doesn't know. Entries are keyed `lang/filename`; a draft
 //! keeps its file name until it is published, and publishing or deleting it drops its entry.
+//! LinkedIn drafts have entries of their own: PublishKit can't post to LinkedIn, so their date is
+//! a reminder on the calendar, never something done on their own.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -59,6 +61,9 @@ fn is_default_stage(stage: &Stage) -> bool {
 pub struct Plan {
     #[serde(default)]
     pub drafts: BTreeMap<String, Entry>,
+    /// LinkedIn drafts, keyed the same way. Only `publish_at` is used: they have no board.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub linkedin: BTreeMap<String, Entry>,
 }
 
 fn path(project_path: &str) -> PathBuf {
@@ -89,6 +94,87 @@ pub fn format_when(when: chrono::NaiveDateTime) -> String {
     when.format("%Y-%m-%dT%H:%M").to_string()
 }
 
+/// When a post went out (or goes out): a day, and the time of day when one is known.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct When {
+    pub day: chrono::NaiveDate,
+    pub time: Option<chrono::NaiveTime>,
+}
+
+impl When {
+    /// `2026-10-16`, `2026-10-16T09:00`, `2026-10-16 09:00` or a full timestamp with its
+    /// offset, `2026-10-16T09:00:00+02:00`, read as the time written there.
+    pub fn parse(text: &str) -> Option<When> {
+        let text = text.trim();
+        if let Ok(stamp) = chrono::DateTime::parse_from_rfc3339(text) {
+            let local = stamp.naive_local();
+            return Some(When {
+                day: local.date(),
+                time: Some(local.time()),
+            });
+        }
+        if text.len() > 10 {
+            let at = parse_when(text)?;
+            return Some(When {
+                day: at.date(),
+                time: Some(at.time()),
+            });
+        }
+        let day = chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").ok()?;
+        Some(When { day, time: None })
+    }
+
+    /// A post's date from its front matter: `date`, with the time from `time:` when the date
+    /// has none, or from a `publish_at` written by hand on the same day.
+    pub fn of_post(fields: &serde_json::Map<String, serde_json::Value>) -> Option<When> {
+        let text = |key: &str| crate::frontmatter::text(fields, key);
+        let mut when = When::parse(&text("date")?)?;
+        if when.time.is_none() {
+            when.time = text("time")
+                .and_then(|t| {
+                    ["%H:%M", "%H:%M:%S"]
+                        .iter()
+                        .find_map(|f| chrono::NaiveTime::parse_from_str(t.trim(), f).ok())
+                })
+                .or_else(|| {
+                    text("publish_at")
+                        .and_then(|t| When::parse(&t))
+                        .filter(|w| w.day == when.day)
+                        .and_then(|w| w.time)
+                });
+        }
+        Some(when)
+    }
+
+    /// `09:00`, when the time is known.
+    pub fn time_label(&self) -> Option<String> {
+        self.time.map(|t| t.format("%H:%M").to_string())
+    }
+
+    /// As a LinkedIn post's `date` keeps it: `2026-10-16T09:00`, or the plain day.
+    pub fn linkedin_date(&self) -> String {
+        match self.time {
+            Some(t) => format_when(self.day.and_time(t)),
+            None => self.day.format("%Y-%m-%d").to_string(),
+        }
+    }
+
+    /// As a blog post's `date` is written: a full timestamp with this computer's offset when
+    /// there is a time or the post's date had one (`previous`), which every framework reads;
+    /// else the plain day.
+    pub fn blog_date(&self, previous: &str) -> String {
+        use chrono::TimeZone;
+        if self.time.is_none() && !previous.contains('T') {
+            return self.day.format("%Y-%m-%d").to_string();
+        }
+        let at = self.day.and_time(self.time.unwrap_or_default());
+        match chrono::Local.from_local_datetime(&at).earliest() {
+            Some(local) => local.format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
+            None => at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        }
+    }
+}
+
 impl Plan {
     pub fn load(project_path: &str) -> Plan {
         std::fs::read_to_string(path(project_path))
@@ -99,7 +185,7 @@ impl Plan {
 
     pub fn save(&self, project_path: &str) -> std::io::Result<()> {
         let path = path(project_path);
-        if self.drafts.is_empty() && !path.exists() {
+        if self.drafts.is_empty() && self.linkedin.is_empty() && !path.exists() {
             return Ok(());
         }
         if let Some(dir) = path.parent() {
@@ -158,6 +244,47 @@ pub fn update(
     plan.save(project_path)
 }
 
+/// When a LinkedIn draft is planned to go out: `2026-11-02T09:00`.
+pub fn linkedin_at(project_path: &str, lang: &str, filename: &str) -> Option<String> {
+    Plan::load(project_path)
+        .linkedin
+        .get(&key(lang, filename))
+        .and_then(|e| e.publish_at.clone())
+}
+
+/// Plans a LinkedIn draft for `when`, or drops its date with `None`.
+pub fn plan_linkedin(
+    project_path: &str,
+    lang: &str,
+    filename: &str,
+    when: Option<String>,
+) -> std::io::Result<()> {
+    let mut plan = Plan::load(project_path);
+    match when {
+        Some(at) => {
+            plan.linkedin.insert(
+                key(lang, filename),
+                Entry {
+                    publish_at: Some(at),
+                    ..Default::default()
+                },
+            );
+        }
+        None => {
+            plan.linkedin.remove(&key(lang, filename));
+        }
+    }
+    plan.save(project_path)
+}
+
+/// Drops a LinkedIn draft from the site's plan, if it is there.
+pub fn forget_linkedin(project_path: &str, lang: &str, filename: &str) {
+    let mut plan = Plan::load(project_path);
+    if plan.linkedin.remove(&key(lang, filename)).is_some() {
+        let _ = plan.save(project_path);
+    }
+}
+
 /// Drops a draft from the site's plan, if it is there.
 pub fn forget(project_path: &str, lang: &str, filename: &str) {
     let mut plan = Plan::load(project_path);
@@ -189,6 +316,68 @@ mod tests {
             r#"{"drafts":{"en/a.md":{"stage":"review"}}}"#
         );
         assert_eq!(plan.get("en", "b.md").stage, Stage::Draft);
+    }
+
+    #[test]
+    fn a_post_date_keeps_its_time_wherever_it_is_written() {
+        let when = |front: &str| {
+            When::of_post(&crate::frontmatter::fields(&format!(
+                "---\n{front}\n---\nBody"
+            )))
+            .map(|w| (w.day.to_string(), w.time_label()))
+        };
+        let at = |d: &str, t: Option<&str>| Some((d.to_string(), t.map(String::from)));
+        assert_eq!(when("date: \"2026-10-16\""), at("2026-10-16", None));
+        assert_eq!(
+            when("date: \"2026-10-16T09:00\""),
+            at("2026-10-16", Some("09:00"))
+        );
+        assert_eq!(
+            when("date: 2026-10-16T09:00:00+02:00"),
+            at("2026-10-16", Some("09:00"))
+        );
+        assert_eq!(
+            when("date: \"2026-10-16\"\ntime: \"09:00\""),
+            at("2026-10-16", Some("09:00"))
+        );
+        // Written by hand on a post saved after it went out.
+        assert_eq!(
+            when("date: \"2026-10-16\"\npublish_at: \"2026-10-16T09:00\""),
+            at("2026-10-16", Some("09:00"))
+        );
+        // Another day's publish_at says nothing of this one.
+        assert_eq!(
+            when("date: \"2026-10-16\"\npublish_at: \"2026-10-20T09:00\""),
+            at("2026-10-16", None)
+        );
+        assert_eq!(when("title: x"), None);
+    }
+
+    #[test]
+    fn a_date_is_written_the_way_each_kind_of_post_keeps_it() {
+        let w = When::parse("2026-10-16T09:00").unwrap();
+        assert_eq!(w.linkedin_date(), "2026-10-16T09:00");
+        assert!(w.blog_date("").starts_with("2026-10-16T09:00:00"));
+        let day = When::parse("2026-10-16").unwrap();
+        assert_eq!(day.linkedin_date(), "2026-10-16");
+        assert_eq!(day.blog_date("2026-01-01"), "2026-10-16");
+        assert!(day
+            .blog_date("2026-01-01T08:00:00Z")
+            .starts_with("2026-10-16T00:00:00"));
+    }
+
+    #[test]
+    fn linkedin_dates_are_kept_apart_from_the_blog_schedule() {
+        let mut plan = Plan::default();
+        plan.linkedin.insert(
+            "fr/a.md".into(),
+            Entry {
+                publish_at: Some("2026-11-02T09:00".into()),
+                ..Default::default()
+            },
+        );
+        assert!(plan.due(parse_when("2027-01-01").unwrap()).is_empty());
+        assert_eq!(plan.get("fr", "a.md"), Entry::default());
     }
 
     #[test]

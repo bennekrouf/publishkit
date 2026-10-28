@@ -442,7 +442,7 @@ fn MainLayout(
                         crate::views::Board { config, posts, selected, editor_mode, content_mode, active_lang, notice }
                     },
                     ContentMode::Calendar => rsx! {
-                        crate::views::Calendar { posts, selected, editor_mode, content_mode, active_lang }
+                        crate::views::Calendar { posts, selected, editor_mode, content_mode, active_lang, li_selected }
                     },
                     ContentMode::LinkedIn => rsx! {
                         LinkedInList { config, posts, li_selected }

@@ -34,9 +34,12 @@ framework it is built with, its languages and how many posts each has; tools def
 PublishKit. list_posts and get_post read posts. queue_post adds a draft: write its body yourself in the site's \
 voice (project gives the site's own writing brief), or pass generate: true to have PublishKit's configured model \
 write it. update_post edits a draft; set_social sets the LinkedIn and X teasers of a post. publish_post makes a \
-draft live: it is dated today and the site's publish command, if it has one, runs, so ask the user before \
-publishing, and before delete_post. schedule_post sets a draft's stage (idea, draft, review) and the date and \
-time it is published by itself; ask the user before scheduling. queue_linkedin adds a standalone LinkedIn post.";
+draft live: it is dated today (or published_at, for a post that went out earlier) and the site's publish \
+command, if it has one, runs, so ask the user before publishing, and before delete_post. schedule_post sets a \
+draft's stage (idea, draft, review) and the date and time it is published by itself; ask the user before \
+scheduling. queue_linkedin adds a standalone LinkedIn post; with published_at it is saved as already posted. \
+PublishKit never posts to LinkedIn itself: a LinkedIn draft's schedule is a reminder on the calendar. set_date \
+changes the date and time of a post, published ones included.";
 
 pub fn serve() {
     let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -138,6 +141,7 @@ async fn call(name: &str, args: &Value) -> Result<Value, String> {
         "publish_post" => publish(args),
         "delete_post" => delete(args),
         "schedule_post" => schedule(args),
+        "set_date" => set_date(args),
         "crosspost_post" => crosspost(args).await,
         "queue_linkedin" => queue_linkedin(args).await,
         _ => Err(format!("no tool {name}")),
@@ -145,6 +149,17 @@ async fn call(name: &str, args: &Value) -> Result<Value, String> {
 }
 
 // ── Arguments ────────────────────────────────────────────────────────────────────────────
+
+/// A date given as `key`: `2026-10-16`, or with its time, `2026-10-16T09:00`. `None` when
+/// it isn't given.
+fn when(args: &Value, key: &str) -> Result<Option<plan::When>, String> {
+    match args[key].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(None),
+        Some(s) => plan::When::parse(s).map(Some).ok_or(format!(
+            "{key} is a date like 2026-10-16, or with its local time like 2026-10-16T09:00, not {s}"
+        )),
+    }
+}
 
 fn text(args: &Value, key: &str) -> Result<String, String> {
     args[key]
@@ -272,6 +287,7 @@ fn post_row(p: &Post) -> Value {
         "title": p.title,
         "description": p.description,
         "date": p.date,
+        "time": p.when.and_then(|w| w.time_label()),
         "status": p.status,
         "tags": p.tags,
         "stage": p.is_draft().then(|| p.stage.key()),
@@ -282,7 +298,15 @@ fn post_row(p: &Post) -> Value {
 }
 
 fn linkedin_row(p: &LinkedInPost) -> Value {
-    json!({ "filename": p.filename, "topic": p.topic, "date": p.date, "status": p.status, "words": words(&p.body) })
+    json!({
+        "filename": p.filename,
+        "topic": p.topic,
+        "date": p.date,
+        "time": p.when.and_then(|w| w.time_label()),
+        "status": p.status,
+        "publish_at": p.publish_at,
+        "words": words(&p.body),
+    })
 }
 
 // ── Tools ────────────────────────────────────────────────────────────────────────────────
