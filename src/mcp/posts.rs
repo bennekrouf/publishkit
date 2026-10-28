@@ -205,9 +205,11 @@ pub(super) fn publish(args: &Value) -> Result<Value, String> {
     let lang = language(args, &cfg)?;
     let name = filename(args)?;
     let linkedin = linkedin(args)?;
+    let at = when(args, "published_at")?;
     draft_path(&project, &cfg, &lang, &name, linkedin)?;
     if linkedin {
-        api::publish_linkedin_post(&project, &cfg, &lang, &name).map_err(|e| format!("{e:#}"))?;
+        api::publish_linkedin_post(&project, &cfg, &lang, &name, at)
+            .map_err(|e| format!("{e:#}"))?;
         return Ok(json!({ "published": folder(&project, &cfg, &lang, true, true).join(&name) }));
     }
     if !args["force"].as_bool().unwrap_or(false) {
@@ -227,7 +229,7 @@ pub(super) fn publish(args: &Value) -> Result<Value, String> {
             }
         }
     }
-    let done = api::publish_post(&project, &lang, &name, &cfg).map_err(|e| format!("{e:#}"))?;
+    let done = api::publish_post(&project, &lang, &name, &cfg, at).map_err(|e| format!("{e:#}"))?;
     let mut v = json!({ "published": done.path, "url": cfg.post_url(&lang, &name) });
     v["note"] = match &done.command {
         None => json!("The site has no publish command; the post goes live with the site's next build and deploy."),
@@ -242,6 +244,9 @@ pub(super) fn schedule(args: &Value) -> Result<Value, String> {
     let cfg = ProjectConfig::load(&project);
     let lang = language(args, &cfg)?;
     let name = filename(args)?;
+    if linkedin(args)? {
+        return schedule_linkedin(args, &project, &cfg, &lang, &name);
+    }
     draft_path(&project, &cfg, &lang, &name, false)?;
     let stage = match args["stage"].as_str() {
         Some(s) => {
@@ -273,6 +278,59 @@ pub(super) fn schedule(args: &Value) -> Result<Value, String> {
     .map_err(|e| e.to_string())?;
     let entry = plan::Plan::load(&project).get(&lang, &name);
     Ok(json!({ "post": name, "stage": entry.stage.key(), "publish_at": entry.publish_at }))
+}
+
+/// A LinkedIn draft's planned date: on the calendar, never posted by PublishKit.
+fn schedule_linkedin(
+    args: &Value,
+    project: &str,
+    cfg: &ProjectConfig,
+    lang: &str,
+    name: &str,
+) -> Result<Value, String> {
+    draft_path(project, cfg, lang, name, true)?;
+    if args.get("stage").is_some_and(|s| !s.is_null()) {
+        return Err("LinkedIn drafts have no stage; give publish_at only".into());
+    }
+    let publish_at = match args["publish_at"].as_str().map(str::trim) {
+        None => return Err("give publish_at, or an empty string to unschedule".into()),
+        Some("") => None,
+        Some(s) => Some(plan::format_when(plan::parse_when(s).ok_or(format!(
+            "publish_at is a local date and time like 2026-11-02T09:00, not {s}"
+        ))?)),
+    };
+    plan::plan_linkedin(project, lang, name, publish_at).map_err(|e| e.to_string())?;
+    Ok(json!({
+        "post": name,
+        "publish_at": plan::linkedin_at(project, lang, name),
+        "note": "PublishKit can't post to LinkedIn: the date puts the draft on the calendar. Once \
+                 it is posted, publish_post with kind linkedin records it.",
+    }))
+}
+
+/// Sets the date, and time, of a post, published or queued.
+pub(super) fn set_date(args: &Value) -> Result<Value, String> {
+    let project = project_path(args)?;
+    let cfg = ProjectConfig::load(&project);
+    let lang = language(args, &cfg)?;
+    let name = filename(args)?;
+    let linkedin = linkedin(args)?;
+    let at = when(args, "date")?.ok_or("date is required")?;
+    let published = match args["where"].as_str().unwrap_or("published") {
+        "queue" => false,
+        "published" => true,
+        other => return Err(format!("where is queue or published, not {other}")),
+    };
+    let path = folder(&project, &cfg, &lang, linkedin, published).join(&name);
+    if !path.is_file() {
+        return Err(format!("no post {name} there ({})", path.display()));
+    }
+    api::set_date(&path, linkedin, at, cfg.front_matter).map_err(|e| format!("{e:#}"))?;
+    let date = frontmatter::text(
+        &frontmatter::fields(&std::fs::read_to_string(&path).unwrap_or_default()),
+        "date",
+    );
+    Ok(json!({ "post": path, "date": date }))
 }
 
 pub(super) async fn crosspost(args: &Value) -> Result<Value, String> {
@@ -345,7 +403,21 @@ pub(super) async fn queue_linkedin(args: &Value) -> Result<Value, String> {
                     .into(),
             ),
         };
+    let at = when(args, "published_at")?;
     let path = api::save_linkedin_to_queue(&project, &cfg, &topic, &lang, &body)
         .map_err(|e| format!("{e:#}"))?;
+    if let Some(at) = at {
+        // Posted on LinkedIn already: saved straight among the posted ones, on its date.
+        let name = Path::new(&path)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        api::publish_linkedin_post(&project, &cfg, &lang, &name, Some(at))
+            .map_err(|e| format!("{e:#}"))?;
+        let posted = folder(&project, &cfg, &lang, true, true).join(&name);
+        return Ok(
+            json!({ "published": posted, "date": at.linkedin_date(), "words": words(&body) }),
+        );
+    }
     Ok(json!({ "queued": path, "words": words(&body) }))
 }

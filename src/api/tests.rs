@@ -23,7 +23,7 @@ fn a_flagged_draft_is_published_in_place_and_keeps_its_other_fields() {
     ]);
     let cfg = ProjectConfig::load(&project);
     assert_eq!(cfg.preset, Some(Preset::Hugo));
-    let done = publish_post(&project, "en", "a.md", &cfg).unwrap();
+    let done = publish_post(&project, "en", "a.md", &cfg, None).unwrap();
     assert_eq!(done.path, root.join("content/posts/a.md"));
     assert_eq!(done.command, None);
     let content = std::fs::read_to_string(&done.path).unwrap();
@@ -68,7 +68,7 @@ fn a_jekyll_draft_moves_into_posts_with_the_date_in_its_name() {
     );
     assert_eq!(load_posts(&project).blog("en").queue.len(), 1);
 
-    let done = publish_post(&project, "en", "hello-world.md", &cfg).unwrap();
+    let done = publish_post(&project, "en", "hello-world.md", &cfg, None).unwrap();
     let today = chrono::Local::now().format("%Y-%m-%d");
     assert_eq!(
         done.path,
@@ -89,7 +89,7 @@ fn a_failing_publish_command_is_reported_and_the_post_stays_published() {
     let mut cfg = ProjectConfig::load(&project);
     assert_eq!(cfg.preset, Some(Preset::PublishKit));
     cfg.publish_command = "echo built && echo broken >&2 && exit 3".into();
-    let done = publish_post(&project, "fr", "a.md", &cfg).unwrap();
+    let done = publish_post(&project, "fr", "a.md", &cfg, None).unwrap();
     let run = done.command.clone().unwrap();
     assert!(!run.ok);
     assert_eq!(run.output, "broken");
@@ -187,7 +187,7 @@ fn a_site_that_deploys_after_publishing_does_so_once_its_index_is_built() {
     cfg.publish_command = "true".into();
     cfg.deploy_command = "echo deployed > deployed.txt".into();
     cfg.deploy_after_publish = true;
-    let done = publish_post(&project, "en", "a.md", &cfg).unwrap();
+    let done = publish_post(&project, "en", "a.md", &cfg, None).unwrap();
     assert!(done.ok() && done.deploy.is_some(), "{done:?}");
     assert!(root.join("deployed.txt").is_file());
     assert!(done.summary().ends_with("Deployed."));
@@ -204,7 +204,7 @@ fn a_bundle_is_written_published_and_deleted_as_a_folder() {
         ("content/en/queue/old/cover.png", "png"),
     ]);
     let mut cfg = ProjectConfig::load(&project);
-    let done = publish_post(&project, "en", "old/index.md", &cfg).unwrap();
+    let done = publish_post(&project, "en", "old/index.md", &cfg, None).unwrap();
     assert_eq!(done.path, root.join("content/en/blog/old/index.md"));
     assert_eq!(done.summary(), "Published old/index.md.");
     assert!(root.join("content/en/blog/old/cover.png").is_file());
@@ -242,4 +242,72 @@ fn a_new_post_never_replaces_one_with_the_same_title() {
         .unwrap()
         .contains("# Same\n\n1"));
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_linkedin_post_marked_as_posted_keeps_the_date_and_time_it_went_out() {
+    let (root, project) = site(&[(
+        "content/en/linkedin/queue/ide.md",
+        "---\ntopic: \"IDE\"\ndate: \"2026-10-20\"\nlang: \"en\"\nstatus: \"draft\"\n---\nBody",
+    )]);
+    let cfg = ProjectConfig::load(&project);
+    crate::plan::plan_linkedin(&project, "en", "ide.md", Some("2026-10-16T09:00".into())).unwrap();
+    assert_eq!(
+        load_posts(&project).linkedin("en").queue[0]
+            .publish_at
+            .as_deref(),
+        Some("2026-10-16T09:00")
+    );
+    let at = crate::plan::When::parse("2026-10-16T09:00");
+    publish_linkedin_post(&project, &cfg, "en", "ide.md", at).unwrap();
+    let posted =
+        std::fs::read_to_string(root.join("content/en/linkedin/published/ide.md")).unwrap();
+    assert!(posted.contains("date: \"2026-10-16T09:00\""), "{posted}");
+    assert!(posted.contains("status: \"published\""), "{posted}");
+    let post = &load_posts(&project).linkedin("en").published[0];
+    assert_eq!(
+        post.when.and_then(|w| w.time_label()).as_deref(),
+        Some("09:00")
+    );
+    // Posted, it is no longer planned.
+    assert_eq!(crate::plan::linkedin_at(&project, "en", "ide.md"), None);
+}
+
+#[test]
+fn a_blog_post_published_with_a_past_date_is_dated_and_named_for_it() {
+    let (root, project) = site(&[
+        ("_config.yml", ""),
+        ("_drafts/hello.md", "---\ntitle: \"Hello\"\n---\nBody"),
+    ]);
+    let cfg = ProjectConfig::load(&project);
+    let at = crate::plan::When::parse("2026-10-16T09:00");
+    let done = publish_post(&project, "en", "hello.md", &cfg, at).unwrap();
+    let name = done
+        .path
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    if cfg.date_in_filename {
+        assert_eq!(name, "2026-10-16-hello.md");
+    }
+    let content = std::fs::read_to_string(&done.path).unwrap();
+    assert!(content.contains("2026-10-16T09:00:00"), "{content}");
+    let _ = root;
+}
+
+#[test]
+fn set_date_rewrites_only_the_date_of_a_published_post() {
+    let (root, project) = site(&[(
+        "content/fr/linkedin/published/ide.md",
+        "---\ntopic: \"IDE\"\ndate: \"2026-10-16\"\nlang: \"fr\"\nstatus: \"published\"\n---\nBody",
+    )]);
+    let path = root.join("content/fr/linkedin/published/ide.md");
+    let at = crate::plan::When::parse("2026-10-16T09:00").unwrap();
+    set_date(&path, true, at, Format::Yaml).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "---\ntopic: \"IDE\"\ndate: \"2026-10-16T09:00\"\nlang: \"fr\"\nstatus: \"published\"\n---\nBody"
+    );
+    let _ = project;
 }

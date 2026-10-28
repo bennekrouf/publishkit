@@ -110,10 +110,17 @@ pub fn load_posts(project_path: &str) -> ProjectPosts {
         }
         posts.blog.insert(lang.clone(), shelf);
         let (li_queue, li_published) = config.resolve_linkedin_paths(project_path, lang);
+        let mut li_queue = read_linkedin_posts(&li_queue, lang);
+        for post in &mut li_queue {
+            post.publish_at = plan
+                .linkedin
+                .get(&format!("{lang}/{}", post.filename))
+                .and_then(|e| e.publish_at.clone());
+        }
         posts.linkedin.insert(
             lang.clone(),
             Shelf {
-                queue: read_linkedin_posts(&li_queue, lang),
+                queue: li_queue,
                 published: read_linkedin_posts(&li_published, lang),
             },
         );
@@ -174,7 +181,7 @@ pub(super) fn read_linkedin_posts(dir: &Path, lang: &str) -> Vec<LinkedInPost> {
         .filter(|e| is_post_file(&e.path()))
         .filter_map(|e| parse_linkedin_post(e.path(), lang))
         .collect();
-    posts.sort_by(|a, b| b.date.cmp(&a.date));
+    posts.sort_by(|a, b| b.when.cmp(&a.when).then(b.date.cmp(&a.date)));
     posts
 }
 
@@ -195,6 +202,8 @@ pub(super) fn parse_linkedin_post(path: PathBuf, lang: &str) -> Option<LinkedInP
         lang: lang.to_string(),
         status,
         date,
+        when: When::of_post(&fields),
+        publish_at: None,
         body,
     })
 }
@@ -261,6 +270,7 @@ pub(super) fn parse_post(
         filename,
         title,
         description,
+        when: When::of_post(&fields),
         date,
         lang: lang.to_string(),
         status,

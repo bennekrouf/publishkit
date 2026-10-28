@@ -1,11 +1,11 @@
 //! Whole-site views of the blog: the board, where drafts move from idea to review and get a
-//! date, and the calendar of what went out and what is scheduled. A post opened from either is
-//! edited in the Blog tab.
+//! date, and the calendar of what went out and what is scheduled, blog and LinkedIn. A post
+//! opened from either is edited in its own tab.
 
 use crate::api;
 use crate::plan::{self, Stage};
 use crate::screens::{when_label, ContentMode};
-use crate::state::{load_posts, AppConfig, Post, ProjectConfig, ProjectPosts};
+use crate::state::{load_posts, AppConfig, LinkedInPost, Post, ProjectConfig, ProjectPosts};
 use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
 use std::collections::BTreeMap;
@@ -225,6 +225,29 @@ fn BoardCard(
     }
 }
 
+/// One entry on the calendar: a blog post or a LinkedIn post, out already or planned.
+#[derive(Clone, PartialEq)]
+enum Item {
+    Blog(Post),
+    LinkedIn(LinkedInPost),
+}
+
+impl Item {
+    fn title(&self) -> &str {
+        match self {
+            Item::Blog(p) => &p.title,
+            Item::LinkedIn(p) => &p.topic,
+        }
+    }
+
+    fn lang(&self) -> &str {
+        match self {
+            Item::Blog(p) => &p.lang,
+            Item::LinkedIn(p) => &p.lang,
+        }
+    }
+}
+
 /// Monday-first day names, for the calendar's head.
 const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -235,6 +258,7 @@ pub fn Calendar(
     editor_mode: Signal<bool>,
     content_mode: Signal<ContentMode>,
     active_lang: Signal<String>,
+    li_selected: Signal<Option<LinkedInPost>>,
 ) -> Element {
     let today = chrono::Local::now().date_naive();
     let mut month = use_signal(|| (today.year(), today.month()));
@@ -250,26 +274,39 @@ pub fn Calendar(
     let days = (next_first - first).num_days();
     let cells = ((offset + days + 6) / 7) * 7;
 
-    // What went out on each day, and what is due out.
+    // What went out on each day, and what is due out, each with its time when known.
     let all = posts.read().clone();
     let multilingual = all.languages.len() > 1;
-    let mut by_day: BTreeMap<NaiveDate, Vec<(Post, bool)>> = BTreeMap::new();
+    type Entry = (Option<chrono::NaiveTime>, Item, bool);
+    let mut by_day: BTreeMap<NaiveDate, Vec<Entry>> = BTreeMap::new();
+    let mut add = |when: Option<plan::When>, item: Item, scheduled: bool| {
+        if let Some(w) = when {
+            by_day
+                .entry(w.day)
+                .or_default()
+                .push((w.time, item, scheduled));
+        }
+    };
+    let planned = |at: &Option<String>| at.as_deref().and_then(plan::When::parse);
     for lang in &all.languages {
         let shelf = all.blog(lang);
         for post in shelf.published {
-            if let Some(day) = post
-                .date
-                .get(..10)
-                .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
-            {
-                by_day.entry(day).or_default().push((post, false));
-            }
+            add(post.when, Item::Blog(post), false);
         }
         for post in shelf.queue {
-            if let Some(when) = post.publish_at.as_deref().and_then(plan::parse_when) {
-                by_day.entry(when.date()).or_default().push((post, true));
-            }
+            add(planned(&post.publish_at), Item::Blog(post), true);
         }
+        let shelf = all.linkedin(lang);
+        for post in shelf.published {
+            add(post.when, Item::LinkedIn(post), false);
+        }
+        for post in shelf.queue {
+            add(planned(&post.publish_at), Item::LinkedIn(post), true);
+        }
+    }
+    // Through the day: untimed posts first, then by time.
+    for items in by_day.values_mut() {
+        items.sort_by_key(|(time, _, _)| *time);
     }
 
     let mut step = move |delta: i32| {
@@ -285,7 +322,7 @@ pub fn Calendar(
                 span { class: "calendar-title", "{first.format(\"%B %Y\")}" }
                 button { class: "btn-small", onclick: move |_| step(1), "›" }
                 button { class: "btn-small", onclick: move |_| month.set((today.year(), today.month())), "Today" }
-                span { class: "settings-hint", "Published posts on their date; ⏱ scheduled drafts on the day they go out." }
+                span { class: "settings-hint", "Blog and LinkedIn posts on the day they went out; ⏱ scheduled drafts on the day they go out." }
             }
             div { class: "calendar-head",
                 for name in WEEKDAYS {
@@ -306,19 +343,40 @@ pub fn Calendar(
                         rsx! {
                             div { class,
                                 div { class: "calendar-day-number", "{day.day()}" }
-                                for (post, scheduled) in items {
+                                for (time, item, scheduled) in items {
                                     {
-                                        let opened = post.clone();
-                                        let lang = if multilingual { format!("{} · ", post.lang.to_uppercase()) } else { String::new() };
-                                        let time = post.publish_at.as_deref().and_then(plan::parse_when)
-                                            .map(|w| w.format("%H:%M ").to_string()).unwrap_or_default();
+                                        let lang = if multilingual { format!("{} · ", item.lang().to_uppercase()) } else { String::new() };
+                                        let time = time.map(|t| t.format("%H:%M ").to_string()).unwrap_or_default();
+                                        let linkedin = matches!(item, Item::LinkedIn(_));
+                                        let class = match (scheduled, linkedin) {
+                                            (true, true) => "calendar-item scheduled linkedin",
+                                            (true, false) => "calendar-item scheduled",
+                                            (false, true) => "calendar-item linkedin",
+                                            (false, false) => "calendar-item",
+                                        };
+                                        let title = item.title().to_string();
+                                        let tip = match (scheduled, linkedin) {
+                                            (true, true) => format!("LinkedIn, planned: {title}"),
+                                            (true, false) => format!("Scheduled: {title}"),
+                                            (false, true) => format!("Posted on LinkedIn: {title}"),
+                                            (false, false) => format!("Published: {title}"),
+                                        };
                                         rsx! {
                                             div {
-                                                class: if scheduled { "calendar-item scheduled" } else { "calendar-item" },
-                                                title: "{post.title}",
-                                                onclick: move |_| open(opened.clone(), selected, editor_mode, content_mode, active_lang),
-                                                if scheduled { "⏱ {time}" }
-                                                "{lang}{post.title}"
+                                                class,
+                                                title: "{tip}",
+                                                onclick: move |_| match item.clone() {
+                                                    Item::Blog(post) => open(post, selected, editor_mode, content_mode, active_lang),
+                                                    Item::LinkedIn(post) => {
+                                                        let mut li_selected = li_selected;
+                                                        let mut content_mode = content_mode;
+                                                        li_selected.set(Some(post));
+                                                        content_mode.set(ContentMode::LinkedIn);
+                                                    }
+                                                },
+                                                if scheduled { "⏱ " }
+                                                if linkedin { span { class: "calendar-in", "in" } }
+                                                "{time}{lang}{title}"
                                             }
                                         }
                                     }

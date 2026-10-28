@@ -53,6 +53,10 @@ pub(super) fn LinkedInItem(
     let post_click = post.clone();
     let post_pub = post.clone();
     let post_del = post.clone();
+    // "Mark as posted…" open, the date and time it went out, and why it failed.
+    let mut marking = use_signal(|| false);
+    let mut posted_at = use_signal(String::new);
+    let mut mark_error = use_signal(String::new);
 
     rsx! {
         div {
@@ -60,22 +64,53 @@ pub(super) fn LinkedInItem(
             onclick: move |_| *li_selected.write() = Some(post_click.clone()),
 
             div { class: "post-item-title", "{post.topic}" }
-            div { class: "post-item-date",  "{post.date}" }
+            div { class: "post-item-date", "{date_label(&post)}" }
+            if let Some(at) = &post.publish_at {
+                div { class: "post-item-date", title: "Planned on the calendar", "⏱ {when_label(at)}" }
+            }
 
-            if is_queue {
+            if is_queue && marking() {
+                div { class: "post-item-actions mark-posted", onclick: move |e| e.stop_propagation(),
+                    input {
+                        r#type: "datetime-local",
+                        title: "When it went out on LinkedIn",
+                        value: "{posted_at}",
+                        oninput: move |e| posted_at.set(e.value()),
+                    }
+                    button {
+                        class: "btn-micro btn-publish",
+                        disabled: crate::plan::When::parse(&posted_at.read()).is_none(),
+                        onclick: move |_| {
+                            let project = config.read().project_path.clone().unwrap_or_default();
+                            let pcfg = ProjectConfig::load(&project);
+                            let at = crate::plan::When::parse(&posted_at.read());
+                            match api::publish_linkedin_post(&project, &pcfg, &post_pub.lang, &post_pub.filename, at) {
+                                Ok(()) => {
+                                    marking.set(false);
+                                    *posts.write() = load_posts(&project);
+                                }
+                                Err(e) => mark_error.set(format!("{e:#}")),
+                            }
+                        },
+                        "Save"
+                    }
+                    button { class: "btn-micro", onclick: move |_| marking.set(false), "Cancel" }
+                    if !mark_error.read().is_empty() {
+                        div { class: "status-msg", "{mark_error}" }
+                    }
+                }
+            } else if is_queue {
                 div { class: "post-item-actions",
                     button {
                         class: "btn-micro btn-publish",
-                        title: "Mark as posted (after you've published it on LinkedIn)",
+                        title: "Record it as posted, on the date and time it went out on LinkedIn",
                         onclick: move |e| {
                             e.stop_propagation();
-                            let project = config.read().project_path.clone().unwrap_or_default();
-                            let pcfg = ProjectConfig::load(&project);
-                            if api::publish_linkedin_post(&project, &pcfg, &post_pub.lang, &post_pub.filename).is_ok() {
-                                *posts.write() = load_posts(&project);
-                            }
+                            posted_at.set(crate::plan::format_when(chrono::Local::now().naive_local()));
+                            mark_error.set(String::new());
+                            marking.set(true);
                         },
-                        "Mark posted"
+                        "Mark as posted…"
                     }
                     button {
                         class: "btn-micro btn-delete",
@@ -92,6 +127,17 @@ pub(super) fn LinkedInItem(
                 }
             }
         }
+    }
+}
+
+/// A post's date as the lists show it: its day, and its time when known.
+fn date_label(post: &LinkedInPost) -> String {
+    match post.when {
+        Some(w) => match w.time_label() {
+            Some(t) => format!("{} {t}", w.day.format("%Y-%m-%d")),
+            None => w.day.format("%Y-%m-%d").to_string(),
+        },
+        None => post.date.clone(),
     }
 }
 
@@ -194,7 +240,7 @@ pub(super) fn LinkedInPreviewPanel(li_selected: Signal<Option<LinkedInPost>>) ->
             if let Some(p) = post {
                 div { class: "preview-meta",
                     span { class: "preview-lang-badge", "{p.lang.to_uppercase()}" }
-                    span { class: "preview-date", "{p.date}" }
+                    span { class: "preview-date", "{date_label(&p)}" }
                     span {
                         class: if p.status == "published" { "status-badge published" } else { "status-badge draft" },
                         "{p.status}"

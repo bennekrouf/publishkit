@@ -515,6 +515,14 @@ select:focus { border-color: var(--blue); }
 }
 .calendar-item:hover { background: var(--bg3); }
 .calendar-item.scheduled { background: var(--blue-dark); color: var(--text1); border: 1px dashed var(--blue); }
+.calendar-item.linkedin { border-left: 3px solid #0a66c2; }
+.calendar-item.scheduled.linkedin { border-left: 3px dashed #0a66c2; }
+.calendar-in {
+  display: inline-block; margin-right: 4px; padding: 0 3px; border-radius: 2px;
+  background: #0a66c2; color: #fff; font-size: 9px; font-weight: 700; line-height: 1.4;
+}
+.mark-posted { flex-wrap: wrap; }
+.mark-posted input { font-size: 11px; padding: 2px 4px; }
 
 /* ── Checks before publishing ── */
 .checks { display: flex; flex-direction: column; gap: 3px; font-size: 11px; line-height: 1.4; }

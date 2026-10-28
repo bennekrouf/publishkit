@@ -15,6 +15,28 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- The Calendar now shows your LinkedIn posts too, on the day they went out,
+  marked with a LinkedIn badge, next to your blog posts. Planned drafts stay
+  dashed, so what went out and what is still to come are easy to tell apart.
+- Posts can carry a time of day. Write it in the date (`2026-10-16T09:00`) or
+  in a separate `time:` field, and the Calendar and the LinkedIn list show it.
+- **Mark as posted…** on a LinkedIn draft asks when it went out, so a post you
+  published on LinkedIn first and saved here afterwards gets its real date and
+  time, not today's.
+- Claude can do the same: publish a post or save a LinkedIn post as posted on
+  a past date and time, change the date of a post that is already published,
+  and plan a LinkedIn draft on the Calendar. PublishKit doesn't post to
+  LinkedIn, so a planned LinkedIn draft is a reminder, never posted on its own.
+
+### Changed
+
+- A LinkedIn post marked as posted no longer replaces a posted one with the
+  same file name.
+
 ## [0.1.32] - 2026-10-28
 
 ### Added
