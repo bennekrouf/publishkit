@@ -94,7 +94,7 @@ pub(super) fn SettingsModal(
                                 class: if region == Some(r) { "region active" } else { "region" },
                                 title: "api0, in {r.label}",
                                 onclick: move |_| *selected_provider.write() = LlmProvider::api0(r.id),
-                                crate::api0::RegionFlag { id: r.id }
+                                desktop_kit::ui::RegionFlag { id: r.id }
                                 span { class: "region-label", "{r.label}" }
                                 span { class: "region-note", "{note}" }
                             }

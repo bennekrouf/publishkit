@@ -3,6 +3,7 @@ use crate::state::{
     content_stamp, load_posts, site_label, AppConfig, Drafts, LinkedInPost, LlmProvider, Post,
     Preset, ProjectConfig, ProjectPosts,
 };
+use desktop_kit::ui::{Header, Theme};
 use dioxus::prelude::*;
 use pulldown_cmark::{html, Options, Parser};
 mod posts;
@@ -37,23 +38,7 @@ pub fn App() -> Element {
     let show_settings = use_signal(|| false);
     let content_mode = use_signal(|| ContentMode::Blog);
     let li_selected = use_signal(|| None::<LinkedInPost>);
-    let mut is_light = use_signal(|| false);
-
-    // Follow the OS light/dark setting on startup — CSS already defaults to
-    // this via a `prefers-color-scheme` media query, so this just keeps the
-    // toggle button's icon in sync with that initial state.
-    use_hook(|| {
-        spawn(async move {
-            if let Ok(prefers_light) =
-                document::eval("return window.matchMedia('(prefers-color-scheme: light)').matches;")
-                    .await
-            {
-                if let Some(v) = prefers_light.as_bool() {
-                    is_light.set(v);
-                }
-            }
-        });
-    });
+    let theme = desktop_kit::ui::use_theme();
 
     // Anonymous usage statistics. On by default, but only once the person has
     // been told: `start` reads the opt-outs (including a shell profile's),
@@ -123,7 +108,7 @@ pub fn App() -> Element {
             }
         }
         if has_project {
-            MainLayout { config, posts, selected, editor_mode, show_settings, content_mode, li_selected, is_light }
+            MainLayout { config, posts, selected, editor_mode, show_settings, content_mode, li_selected, theme }
         } else {
             SetupScreen { config, posts, selected, editor_mode }
         }
@@ -167,7 +152,7 @@ fn SetupScreen(
                     "Hugo, Jekyll, Astro, Eleventy, Zola, Docusaurus and Next.js sites are recognised, \
                      as is a plain folder of markdown posts or "
                     code { "content/{{lang}}/{{queue,blog}}" }
-                    ". Where it guessed wrong, change it in ⚙ Settings."
+                    ". Where it guessed wrong, change it in Settings."
                 }
                 button {
                     class: "btn-primary",
@@ -285,12 +270,12 @@ fn ModelSwitcher(config: Signal<AppConfig>) -> Element {
     rsx! {
         div { class: "model-switcher",
             button {
-                class: "btn-small model-current",
+                class: "kit-btn kit-model",
                 title: "The model posts are written with \u{2014} click to change it",
                 onclick: move |_| open.toggle(),
                 match region {
                     Some(r) => rsx! {
-                        crate::api0::RegionFlag { id: r.id }
+                        desktop_kit::ui::RegionFlag { id: r.id }
                         span { "{r.label}" }
                     },
                     None => rsx! { span { "{config.read().provider.label()}" } },
@@ -312,7 +297,7 @@ fn ModelSwitcher(config: Signal<AppConfig>) -> Element {
                                 drop(cfg);
                                 open.set(false);
                             },
-                            crate::api0::RegionFlag { id: r.id }
+                            desktop_kit::ui::RegionFlag { id: r.id }
                             span { "{r.label}" }
                         }
                     }
@@ -333,7 +318,7 @@ fn MainLayout(
     show_settings: Signal<bool>,
     content_mode: Signal<ContentMode>,
     li_selected: Signal<Option<LinkedInPost>>,
-    mut is_light: Signal<bool>,
+    theme: Theme,
 ) -> Element {
     let mut show_mcp = use_signal(|| false);
     let active_lang = use_signal(String::new);
@@ -412,120 +397,76 @@ fn MainLayout(
     });
     rsx! {
         div { class: "layout",
-            div { class: "topbar",
-                span { class: "topbar-title", "PublishKit" }
+            Header {
+                theme,
+                on_settings: move |_| show_settings.toggle(),
+                on_mcp: move |_| show_mcp.set(true),
+                actions: rsx! {
+                    button {
+                        class: "kit-btn kit-icon",
+                        title: "Read the posts from disk again",
+                        onclick: move |_| {
+                            let p = config.read().project_path.clone().unwrap_or_default();
+                            *posts.write() = load_posts(&p);
+                        },
+                        "↻"
+                    }
+                    {
+                        let p = config.read().project_path.clone().unwrap_or_default();
+                        let command = ProjectConfig::load(&p).deploy_command;
+                        rsx! {
+                            button {
+                                class: "kit-btn kit-deploy",
+                                disabled: deploying(),
+                                title: if command.is_empty() { "Set the command that puts your site online in Settings".to_string() } else { format!("Runs {command}") },
+                                onclick: move |_| {
+                                    let project = config.read().project_path.clone().unwrap_or_default();
+                                    let pcfg = ProjectConfig::load(&project);
+                                    if pcfg.deploy_command.trim().is_empty() {
+                                        notice.set("Set the command that puts your site online in Settings → After publishing / Deploy.".to_string());
+                                        show_settings.set(true);
+                                        return;
+                                    }
+                                    deploying.set(true);
+                                    notice.set(format!("Deploying with {}…", pcfg.deploy_command));
+                                    spawn(async move {
+                                        let run = tokio::task::spawn_blocking(move || api::deploy(&project, &pcfg)).await.ok().flatten();
+                                        notice.set(match run {
+                                            Some(run) if run.ok => format!("Deployed: {} ran.", run.command),
+                                            Some(run) => format!("The deploy failed: {}", run.output),
+                                            None => String::new(),
+                                        });
+                                        deploying.set(false);
+                                    });
+                                },
+                                if deploying() { "Deploying…" } else { "Deploy" }
+                            }
+                        }
+                    }
+                },
+                model: rsx! { ModelSwitcher { config } },
+                pro: rsx! { crate::pro::ProButton {} },
                 SiteSwitcher { config, posts, selected, editor_mode, active_lang, notice }
                 {
                     let p = config.read().project_path.clone().unwrap_or_default();
                     let site = ProjectConfig::load(&p);
                     rsx! {
                         if let Some(preset) = site.preset {
-                            span { class: "provider-badge", title: "How PublishKit reads this site — change it in ⚙ Settings", "{preset.label()}" }
+                            span { class: "provider-badge", title: "How PublishKit reads this site — change it in Settings", "{preset.label()}" }
                         }
                     }
                 }
-                div { class: "mode-tabs",
-                    button {
-                        class: if *content_mode.read() == ContentMode::Blog { "tab active" } else { "tab" },
-                        onclick: move |_| *content_mode.write() = ContentMode::Blog,
-                        "Blog"
-                    }
-                    button {
-                        class: if *content_mode.read() == ContentMode::Board { "tab active" } else { "tab" },
-                        onclick: move |_| *content_mode.write() = ContentMode::Board,
-                        "Board"
-                    }
-                    button {
-                        class: if *content_mode.read() == ContentMode::Calendar { "tab active" } else { "tab" },
-                        onclick: move |_| *content_mode.write() = ContentMode::Calendar,
-                        "Calendar"
-                    }
-                    button {
-                        class: if *content_mode.read() == ContentMode::LinkedIn { "tab active" } else { "tab" },
-                        onclick: move |_| *content_mode.write() = ContentMode::LinkedIn,
-                        "LinkedIn"
-                    }
-                }
-                span { class: "topbar-path",
-                    { config.read().project_path.as_deref().unwrap_or("") }
-                }
-                ModelSwitcher { config }
-                crate::pro::ProButton {}
-                button {
-                    class: "btn-small",
-                    onclick: move |_| {
-                        let p = config.read().project_path.clone().unwrap_or_default();
-                        *posts.write() = load_posts(&p);
-                    },
-                    "↻"
-                }
-                // theme toggle
-                button {
-                    class: "btn-theme",
-                    title: if *is_light.read() { "Switch to dark mode" } else { "Switch to light mode" },
-                    onclick: move |_| {
-                        let next = !*is_light.read();
-                        is_light.set(next);
-                        document::eval(&format!("document.body.className = '{}';", if next { "light" } else { "dark" }));
-                    },
-                    if *is_light.read() { "🌙" } else { "☀" }
-                }
-                {
-                    let p = config.read().project_path.clone().unwrap_or_default();
-                    let command = ProjectConfig::load(&p).deploy_command;
-                    rsx! {
+                div { class: "kit-tabs",
+                    for (mode, name) in [(ContentMode::Blog, "Blog"), (ContentMode::Board, "Board"), (ContentMode::Calendar, "Calendar"), (ContentMode::LinkedIn, "LinkedIn")] {
                         button {
-                            class: "btn-small btn-deploy",
-                            disabled: deploying(),
-                            title: if command.is_empty() { "Set the command that puts your site online in ⚙ Settings".to_string() } else { format!("Runs {command}") },
-                            onclick: move |_| {
-                                let project = config.read().project_path.clone().unwrap_or_default();
-                                let pcfg = ProjectConfig::load(&project);
-                                if pcfg.deploy_command.trim().is_empty() {
-                                    notice.set("Set the command that puts your site online in ⚙ Settings → After publishing / Deploy.".to_string());
-                                    show_settings.set(true);
-                                    return;
-                                }
-                                deploying.set(true);
-                                notice.set(format!("Deploying with {}…", pcfg.deploy_command));
-                                spawn(async move {
-                                    let run = tokio::task::spawn_blocking(move || api::deploy(&project, &pcfg)).await.ok().flatten();
-                                    notice.set(match run {
-                                        Some(run) if run.ok => format!("Deployed: {} ran.", run.command),
-                                        Some(run) => format!("The deploy failed: {}", run.output),
-                                        None => String::new(),
-                                    });
-                                    deploying.set(false);
-                                });
-                            },
-                            if deploying() { "Deploying…" } else { "Deploy" }
+                            key: "{name}",
+                            class: if *content_mode.read() == mode { "kit-tab kit-on" } else { "kit-tab" },
+                            onclick: move |_| *content_mode.write() = mode,
+                            "{name}"
                         }
                     }
                 }
-                button {
-                    class: "btn-small",
-                    title: "Use PublishKit from Claude Desktop or Claude Code",
-                    onclick: move |_| show_mcp.set(true),
-                    "MCP"
-                }
-                // A link, not a button: the webview hands it to the browser.
-                a {
-                    class: "btn-small",
-                    href: "{crate::feedback::contact_url()}",
-                    target: "_blank",
-                    title: "Ideas, bugs, questions: send them to the person who makes PublishKit",
-                    "Feedback"
-                }
-                // gear icon button
-                button {
-                    class: "btn-icon",
-                    title: "Settings",
-                    onclick: move |_| {
-                        let v = *show_settings.read();
-                        *show_settings.write() = !v;
-                    },
-                    "⚙"
-                }
+                span { class: "kit-detail", { config.read().project_path.as_deref().unwrap_or("") } }
             }
 
             div {
