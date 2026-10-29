@@ -15,6 +15,13 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- The site format indicator in the top bar is now a folder button. Clicking it
+  opens the Settings screen.
+
 ## [0.1.34] - 2026-10-29
 
 ### Added
