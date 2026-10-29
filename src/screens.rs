@@ -400,7 +400,15 @@ fn MainLayout(
                     let site = ProjectConfig::load(&p);
                     rsx! {
                         if let Some(preset) = site.preset {
-                            span { class: "provider-badge", title: "How PublishKit reads this site — change it in Settings", "{preset.label()}" }
+                            button {
+                                class: "kit-btn kit-icon",
+                                title: "Read as {preset.label()} — change it in Settings",
+                                aria_label: "Site format: {preset.label()}",
+                                onclick: move |_| show_settings.set(true),
+                                svg { view_box: "0 0 24 24", "aria-hidden": "true",
+                                    path { d: "M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" }
+                                }
+                            }
                         }
                     }
                 }
