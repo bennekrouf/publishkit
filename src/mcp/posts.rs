@@ -129,7 +129,28 @@ pub(super) fn update_post(args: &Value) -> Result<Value, String> {
     let cfg = ProjectConfig::load(&project);
     let lang = language(args, &cfg)?;
     let name = filename(args)?;
-    let path = draft_path(&project, &cfg, &lang, &name, linkedin(args)?)?;
+    let linkedin = linkedin(args)?;
+    let media = media(args)?;
+    let text_given = args["content"].is_string() || args["body"].is_string();
+    let path = if published(args)? {
+        // Posted already: only its media, so a post made on LinkedIn is recorded complete.
+        if !linkedin {
+            return Err("published blog posts aren't edited here".into());
+        }
+        if text_given || media.is_none() {
+            return Err("a posted LinkedIn post takes media only here".into());
+        }
+        let path = folder(&project, &cfg, &lang, true, true).join(&name);
+        if !path.is_file() {
+            return Err(format!("no posted LinkedIn post {name} in {lang}"));
+        }
+        path
+    } else {
+        draft_path(&project, &cfg, &lang, &name, linkedin)?
+    };
+    if media.is_some() && !linkedin {
+        return Err("media is for LinkedIn posts (kind linkedin)".into());
+    }
     let current =
         std::fs::read_to_string(&path).map_err(|_| format!("no draft {name} in {lang}"))?;
     let updated = match (args["content"].as_str(), args["body"].as_str()) {
@@ -137,16 +158,24 @@ pub(super) fn update_post(args: &Value) -> Result<Value, String> {
             if frontmatter::split(c).is_none() {
                 return Err("content is the whole file, front matter (--- or +++) first".into());
             }
-            c.to_string()
+            Some(c.to_string())
         }
-        (None, Some(b)) => match split_front_matter(&current) {
+        (None, Some(b)) => Some(match split_front_matter(&current) {
             Some(front) => format!("{front}\n\n{}", b.trim_start()),
             None => b.to_string(),
-        },
-        (None, None) => return Err("give body or content".into()),
+        }),
+        (None, None) if media.is_some() => None,
+        (None, None) => return Err("give body, content or media".into()),
     };
-    std::fs::write(&path, &updated).map_err(|e| format!("{}: {e}", path.display()))?;
-    Ok(json!({ "updated": path, "words": words(&updated) }))
+    if let Some(updated) = &updated {
+        std::fs::write(&path, updated).map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    let mut v = json!({ "updated": path });
+    if let Some(sources) = media {
+        v["media"] = json!(api::set_media(&path, &sources).map_err(|e| format!("{e:#}"))?);
+    }
+    v["words"] = json!(words(&std::fs::read_to_string(&path).unwrap_or_default()));
+    Ok(v)
 }
 
 pub(super) async fn set_social(args: &Value) -> Result<Value, String> {
@@ -404,8 +433,17 @@ pub(super) async fn queue_linkedin(args: &Value) -> Result<Value, String> {
             ),
         };
     let at = when(args, "published_at")?;
+    let sources = media(args)?.unwrap_or_default();
     let path = api::save_linkedin_to_queue(&project, &cfg, &topic, &lang, &body)
         .map_err(|e| format!("{e:#}"))?;
+    let attached = match api::set_media(Path::new(&path), &sources) {
+        Ok(names) => names,
+        Err(e) => {
+            // Nothing half-saved: the draft goes with the media it couldn't take.
+            let _ = std::fs::remove_file(&path);
+            return Err(format!("{e:#}"));
+        }
+    };
     if let Some(at) = at {
         // Posted on LinkedIn already: saved straight among the posted ones, on its date.
         let name = Path::new(&path)
@@ -416,8 +454,8 @@ pub(super) async fn queue_linkedin(args: &Value) -> Result<Value, String> {
             .map_err(|e| format!("{e:#}"))?;
         let posted = folder(&project, &cfg, &lang, true, true).join(&name);
         return Ok(
-            json!({ "published": posted, "date": at.linkedin_date(), "words": words(&body) }),
+            json!({ "published": posted, "date": at.linkedin_date(), "words": words(&body), "media": attached }),
         );
     }
-    Ok(json!({ "queued": path, "words": words(&body) }))
+    Ok(json!({ "queued": path, "words": words(&body), "media": attached }))
 }

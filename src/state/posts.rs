@@ -205,6 +205,7 @@ pub(super) fn parse_linkedin_post(path: PathBuf, lang: &str) -> Option<LinkedInP
         when: When::of_post(&fields),
         publish_at: None,
         body,
+        media: frontmatter::list(&fields, "media"),
     })
 }
 

@@ -15,6 +15,21 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- LinkedIn posts can carry images (one or several, up to 20) or one video.
+  The files sit next to the post and are listed in its front matter
+  (`media: [cover.png]`); they move with it when it is marked as posted and
+  go when a draft is deleted. The LinkedIn preview shows them under the text,
+  and the LinkedIn list and the Calendar show what each post carries.
+- **Add media…** in the LinkedIn preview picks the images or the video to
+  attach, and ✕ on one takes it off again. It works on posted posts too.
+- Claude can attach them: images or a video when it saves a LinkedIn post or
+  edits one, including a post already made on LinkedIn, so what you posted
+  is recorded complete.
+
 ## [0.1.33] - 2026-10-28
 
 ### Added

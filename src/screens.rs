@@ -11,6 +11,7 @@ use posts::*;
 mod panels;
 use panels::*;
 mod linkedin;
+pub(crate) use linkedin::media_label;
 use linkedin::*;
 mod settings;
 use settings::*;
@@ -448,7 +449,7 @@ fn MainLayout(
                         LinkedInList { config, posts, li_selected }
                         PanelResizer { resizing, left_width, config }
                         LinkedInCenterPanel { config, posts }
-                        LinkedInPreviewPanel { li_selected }
+                        LinkedInPreviewPanel { config, posts, li_selected }
                     },
                 }
             }

@@ -64,7 +64,12 @@ pub(super) fn LinkedInItem(
             onclick: move |_| *li_selected.write() = Some(post_click.clone()),
 
             div { class: "post-item-title", "{post.topic}" }
-            div { class: "post-item-date", "{date_label(&post)}" }
+            div { class: "post-item-date",
+                "{date_label(&post)}"
+                if let Some(label) = media_label(&post.media) {
+                    span { class: "post-item-media", title: "Attached to the post", "{label}" }
+                }
+            }
             if let Some(at) = &post.publish_at {
                 div { class: "post-item-date", title: "Planned on the calendar", "⏱ {when_label(at)}" }
             }
@@ -128,6 +133,74 @@ pub(super) fn LinkedInItem(
             }
         }
     }
+}
+
+/// What a post carries, in a word: `🖼 3`, `🎞 video`; `None` without media.
+pub(crate) fn media_label(media: &[String]) -> Option<String> {
+    let first = media.first()?;
+    Some(match api::Media::of(first) {
+        Some(api::Media::Video) => "🎞 video".to_string(),
+        _ => format!("🖼 {}", media.len()),
+    })
+}
+
+/// A post's media, as the preview shows them: an image as a `data:` address, a video by name.
+#[derive(Clone, PartialEq)]
+enum Shown {
+    Image {
+        name: String,
+        src: String,
+    },
+    Video {
+        name: String,
+        path: std::path::PathBuf,
+    },
+    Missing {
+        name: String,
+    },
+}
+
+impl Shown {
+    fn name(&self) -> &str {
+        match self {
+            Shown::Image { name, .. } | Shown::Video { name, .. } | Shown::Missing { name } => name,
+        }
+    }
+}
+
+fn shown(post: &LinkedInPost) -> Vec<Shown> {
+    post.media
+        .iter()
+        .map(|name| {
+            let path = post.media_path(name);
+            let name = name.clone();
+            if !path.is_file() {
+                return Shown::Missing { name };
+            }
+            match api::Media::of(&name) {
+                Some(api::Media::Video) => Shown::Video { name, path },
+                _ => match local_image(&name, &post.path, "", "", "") {
+                    Some(src) => Shown::Image { name, src },
+                    // Too large to preview: shown by name, like a video.
+                    None => Shown::Video { name, path },
+                },
+            }
+        })
+        .collect()
+}
+
+/// Opens a file in the app the system has for it.
+fn open_file(path: &std::path::Path) {
+    let mut command = if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else if cfg!(target_os = "windows") {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", ""]);
+        c
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    let _ = command.arg(path).spawn(); // nothing to open it with: the click does nothing
 }
 
 /// A post's date as the lists show it: its day, and its time when known.
@@ -230,10 +303,50 @@ pub(super) fn LinkedInCenterPanel(
     }
 }
 
+/// Sets a post's media to `sources`, then shows it as it is now; `error` says why not.
+fn change_media(
+    post: &LinkedInPost,
+    sources: &[std::path::PathBuf],
+    config: Signal<AppConfig>,
+    mut posts: Signal<ProjectPosts>,
+    mut li_selected: Signal<Option<LinkedInPost>>,
+    mut error: Signal<String>,
+) {
+    match api::set_media(&post.path, sources) {
+        Ok(_) => {
+            error.set(String::new());
+            let project = config.read().project_path.clone().unwrap_or_default();
+            let all = load_posts(&project);
+            let shelf = all.linkedin(&post.lang);
+            let now = shelf
+                .queue
+                .iter()
+                .chain(&shelf.published)
+                .find(|p| p.path == post.path)
+                .cloned();
+            posts.set(all);
+            li_selected.set(now);
+        }
+        Err(e) => error.set(format!("{e:#}")),
+    }
+}
+
 #[component]
-pub(super) fn LinkedInPreviewPanel(li_selected: Signal<Option<LinkedInPost>>) -> Element {
+pub(super) fn LinkedInPreviewPanel(
+    config: Signal<AppConfig>,
+    posts: Signal<ProjectPosts>,
+    li_selected: Signal<Option<LinkedInPost>>,
+) -> Element {
     let post = li_selected.read().clone();
     let mut copied = use_signal(|| false);
+    let mut media_error = use_signal(String::new);
+    // Read once per post: the images are encoded for the page, which a click shouldn't redo.
+    let media = use_memo(move || li_selected.read().as_ref().map(shown).unwrap_or_default());
+    // Another post selected: the last one's error isn't about it.
+    use_effect(move || {
+        li_selected.read();
+        media_error.set(String::new());
+    });
 
     rsx! {
         div { class: "panel panel-right",
@@ -252,6 +365,31 @@ pub(super) fn LinkedInPreviewPanel(li_selected: Signal<Option<LinkedInPost>>) ->
                         span { "LinkedIn" }
                         button {
                             class: "btn-copy",
+                            title: "Images or one video, copied next to the post",
+                            onclick: {
+                                let p = p.clone();
+                                move |_| {
+                                    let p = p.clone();
+                                    spawn(async move {
+                                        let Some(files) = rfd::AsyncFileDialog::new()
+                                            .set_title("Add images or a video")
+                                            .add_filter("Images and videos", &["png", "jpg", "jpeg", "gif", "mp4", "mov", "webm", "mkv", "avi"])
+                                            .pick_files()
+                                            .await
+                                        else {
+                                            return;
+                                        };
+                                        let mut sources: Vec<std::path::PathBuf> =
+                                            p.media.iter().map(std::path::PathBuf::from).collect();
+                                        sources.extend(files.iter().map(|f| f.path().to_path_buf()));
+                                        change_media(&p, &sources, config, posts, li_selected, media_error);
+                                    });
+                                }
+                            },
+                            "Add media…"
+                        }
+                        button {
+                            class: "btn-copy",
                             onclick: {
                                 let text = p.body.clone();
                                 move |_| {
@@ -263,6 +401,56 @@ pub(super) fn LinkedInPreviewPanel(li_selected: Signal<Option<LinkedInPost>>) ->
                         }
                     }
                     p { class: "social-card-body", white_space: "pre-wrap", "{p.body}" }
+                    if !media_error.read().is_empty() {
+                        p { class: "status-msg", "{media_error}" }
+                    }
+                    if !media.read().is_empty() {
+                        div { class: if media.read().len() == 1 { "li-media single" } else { "li-media" },
+                            for item in media.read().iter().cloned() {
+                                div { class: "li-media-cell",
+                                    match item.clone() {
+                                        Shown::Image { name, src } => rsx! {
+                                            img { class: "li-media-item", src: "{src}", alt: "{name}", title: "{name}" }
+                                        },
+                                        Shown::Video { name, path } => rsx! {
+                                            button {
+                                                class: "li-media-item li-media-file",
+                                                title: "Open {name}",
+                                                onclick: move |_| open_file(&path),
+                                                span { class: "li-media-play", "▶" }
+                                                span { "{name}" }
+                                            }
+                                        },
+                                        Shown::Missing { name } => rsx! {
+                                            div { class: "li-media-item li-media-file missing",
+                                                title: "Listed in the post's media, but not beside it",
+                                                span { "{name}" }
+                                                span { "missing" }
+                                            }
+                                        },
+                                    }
+                                    button {
+                                        class: "li-media-remove",
+                                        title: "Take it off the post (its copy next to the post is deleted)",
+                                        onclick: {
+                                            let p = p.clone();
+                                            let name = item.name().to_string();
+                                            move |_| {
+                                                let sources: Vec<std::path::PathBuf> = p
+                                                    .media
+                                                    .iter()
+                                                    .filter(|n| **n != name)
+                                                    .map(std::path::PathBuf::from)
+                                                    .collect();
+                                                change_media(&p, &sources, config, posts, li_selected, media_error);
+                                            }
+                                        },
+                                        "✕"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
                 div { class: "preview-empty",
