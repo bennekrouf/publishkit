@@ -5,6 +5,8 @@ use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 mod files;
 pub use files::*;
+mod media;
+pub use media::*;
 
 fn write_in(lang: &str) -> String {
     format!("Write entirely in {}.", language_name(lang))
@@ -92,6 +94,7 @@ pub fn publish_linkedin_post(
     if dst.exists() {
         bail!("{} is already among the posted ones", dst.display());
     }
+    let updated = move_media(&updated, &queue, &published)?;
     std::fs::write(&dst, updated)?;
     std::fs::remove_file(&src)?;
     crate::plan::forget_linkedin(project_path, lang, filename);
@@ -122,6 +125,7 @@ pub fn delete_linkedin_queued(
     filename: &str,
 ) -> Result<()> {
     let (queue, _) = project_config.resolve_linkedin_paths(project_path, lang);
+    delete_media(&queue.join(filename));
     std::fs::remove_file(queue.join(filename))?;
     crate::plan::forget_linkedin(project_path, lang, filename);
     Ok(())

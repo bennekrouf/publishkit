@@ -192,6 +192,11 @@ pub fn set(content: &str, key: &str, value: &Field, default: Format) -> String {
     edit(content, key, Some(value), default)
 }
 
+/// `content` without `key`'s lines; as it is when the key isn't there.
+pub fn remove(content: &str, key: &str) -> String {
+    edit(content, key, None, Format::Yaml)
+}
+
 fn edit(content: &str, key: &str, value: Option<&Field>, default: Format) -> String {
     let Some(parts) = split(content) else {
         return match value {

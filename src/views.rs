@@ -355,11 +355,19 @@ pub fn Calendar(
                                             (false, false) => "calendar-item",
                                         };
                                         let title = item.title().to_string();
+                                        let carries = match &item {
+                                            Item::LinkedIn(p) => crate::screens::media_label(&p.media),
+                                            Item::Blog(_) => None,
+                                        };
                                         let tip = match (scheduled, linkedin) {
                                             (true, true) => format!("LinkedIn, planned: {title}"),
                                             (true, false) => format!("Scheduled: {title}"),
                                             (false, true) => format!("Posted on LinkedIn: {title}"),
                                             (false, false) => format!("Published: {title}"),
+                                        };
+                                        let tip = match &carries {
+                                            Some(label) => format!("{tip} ({label})"),
+                                            None => tip,
                                         };
                                         rsx! {
                                             div {
@@ -377,6 +385,7 @@ pub fn Calendar(
                                                 if scheduled { "⏱ " }
                                                 if linkedin { span { class: "calendar-in", "in" } }
                                                 "{time}{lang}{title}"
+                                                if let Some(label) = carries { span { class: "calendar-media", " {label}" } }
                                             }
                                         }
                                     }

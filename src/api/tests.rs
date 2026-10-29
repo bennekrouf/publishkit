@@ -311,3 +311,91 @@ fn set_date_rewrites_only_the_date_of_a_published_post() {
     );
     let _ = project;
 }
+
+#[test]
+fn a_linkedin_posts_media_sit_beside_it_and_go_where_it_goes() {
+    let (root, project) = site(&[
+        (
+            "content/en/linkedin/queue/ide.md",
+            "---\ntopic: \"IDE\"\ndate: \"2026-10-16\"\nlang: \"en\"\nstatus: \"draft\"\n---\nBody",
+        ),
+        // Another post's cover, already in the posted folder: the moved one gets a name of its own.
+        ("content/en/linkedin/published/cover.png", "old"),
+        ("in/Cover.png", "png"),
+        ("in/two.jpg", "jpg"),
+        ("in/clip.mp4", "mp4"),
+    ]);
+    let cfg = ProjectConfig::load(&project);
+    let post = root.join("content/en/linkedin/queue/ide.md");
+    let names = set_media(&post, &[root.join("in/Cover.png"), root.join("in/two.jpg")]).unwrap();
+    assert_eq!(names, ["cover.png", "two.jpg"]);
+    assert!(root.join("content/en/linkedin/queue/two.jpg").is_file());
+    assert_eq!(load_posts(&project).linkedin("en").queue[0].media, names);
+
+    // Images or one video, not both; a name it has stays, the one left out goes.
+    assert!(set_media(
+        &post,
+        &[PathBuf::from("cover.png"), root.join("in/clip.mp4")]
+    )
+    .is_err());
+    assert_eq!(
+        set_media(&post, &[PathBuf::from("two.jpg")]).unwrap(),
+        ["two.jpg"]
+    );
+    assert!(!root.join("content/en/linkedin/queue/cover.png").exists());
+    let names = set_media(
+        &post,
+        &[root.join("in/Cover.png"), PathBuf::from("two.jpg")],
+    )
+    .unwrap();
+    assert_eq!(names, ["cover.png", "two.jpg"]);
+
+    publish_linkedin_post(&project, &cfg, "en", "ide.md", None).unwrap();
+    let posted = &load_posts(&project).linkedin("en").published;
+    let posted = posted.iter().find(|p| p.filename == "ide.md").unwrap();
+    assert_eq!(posted.media, ["cover-2.png", "two.jpg"]);
+    assert_eq!(
+        std::fs::read_to_string(posted.media_path("cover-2.png")).unwrap(),
+        "png"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("content/en/linkedin/published/cover.png")).unwrap(),
+        "old"
+    );
+    assert!(!root.join("content/en/linkedin/queue/two.jpg").exists());
+
+    // Posted already: the video replaces the images, and [] takes it off again.
+    let path = posted.path.clone();
+    assert_eq!(
+        set_media(&path, &[root.join("in/clip.mp4")]).unwrap(),
+        ["clip.mp4"]
+    );
+    assert!(!root.join("content/en/linkedin/published/two.jpg").exists());
+    assert!(set_media(&path, &[]).unwrap().is_empty());
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(!content.contains("media"), "{content}");
+}
+
+#[test]
+fn deleting_a_linkedin_draft_deletes_its_media() {
+    let (root, project) = site(&[
+        (
+            "content/en/linkedin/queue/ide.md",
+            "---\ntopic: \"IDE\"\nmedia: [\"a.gif\"]\n---\nBody",
+        ),
+        ("content/en/linkedin/queue/a.gif", "gif"),
+        ("content/en/linkedin/queue/other.gif", "gif"),
+    ]);
+    let cfg = ProjectConfig::load(&project);
+    delete_linkedin_queued(&project, &cfg, "en", "ide.md").unwrap();
+    assert!(!root.join("content/en/linkedin/queue/a.gif").exists());
+    assert!(root.join("content/en/linkedin/queue/other.gif").exists());
+}
+
+#[test]
+fn a_linkedin_post_takes_at_most_twenty_images() {
+    let (root, _) = site(&[("q/p.md", "---\ntopic: \"P\"\n---\nBody"), ("x.png", "png")]);
+    let many = vec![root.join("x.png"); MAX_IMAGES + 1];
+    assert!(set_media(&root.join("q/p.md"), &many).is_err());
+    assert!(set_media(&root.join("q/p.md"), &[root.join("notes.txt")]).is_err());
+}

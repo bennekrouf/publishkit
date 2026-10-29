@@ -9,6 +9,10 @@ pub(super) fn tools() -> Value {
     let kind =
         json!({ "type": "string", "enum": ["blog", "linkedin"], "description": "Default blog." });
     let place = json!({ "type": "string", "enum": ["queue", "published"], "description": "Default queue." });
+    let media = json!({ "type": "array", "items": { "type": "string" }, "description": "A LinkedIn post's \
+        images (png, jpg, gif; up to 20) or its one video (mp4, mov, webm, mkv, avi), in order: absolute paths of \
+        files, copied beside the post and listed in its front matter, or names of files it has already. Replaces \
+        the post's media; [] takes them off." });
     let published_at = json!({ "type": "string", "description": "When it actually went out, for a post \
         posted earlier and saved here after: 2026-10-16, or with the local time, 2026-10-16T09:00. Default now." });
     json!([
@@ -70,13 +74,16 @@ pub(super) fn tools() -> Value {
         {
             "name": "update_post",
             "description": "Changes a draft (blog or LinkedIn): body replaces what follows the front matter, \
-                            content replaces the whole file (front matter included). Published posts aren't edited here.",
+                            content replaces the whole file (front matter included), media sets a LinkedIn post's \
+                            images or video. Published posts aren't edited here, except a posted LinkedIn post's \
+                            media (where: published), so a post made on LinkedIn is recorded with what it showed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "project": project, "lang": lang, "filename": filename, "kind": kind,
+                    "project": project, "lang": lang, "filename": filename, "kind": kind, "where": place,
                     "body": { "type": "string" },
                     "content": { "type": "string" },
+                    "media": media,
                 },
                 "required": ["lang", "filename"],
             },
@@ -175,7 +182,7 @@ pub(super) fn tools() -> Value {
             "name": "queue_linkedin",
             "description": "Adds a standalone LinkedIn post to a language's queue. Give body, or generate: true with an \
                             angle to have PublishKit's model write it. For a post already on LinkedIn, give \
-                            published_at and it is saved as posted on that date.",
+                            published_at and it is saved as posted on that date. media attaches its images or video.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -187,6 +194,7 @@ pub(super) fn tools() -> Value {
                     "generate": { "type": "boolean" },
                     "published_at": { "type": "string", "description": "Already posted on LinkedIn: when, \
                         2026-10-16 or 2026-10-16T09:00. The post is saved straight among the posted ones." },
+                    "media": media,
                 },
                 "required": ["lang", "topic"],
             },

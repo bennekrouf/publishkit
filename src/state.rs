@@ -29,6 +29,15 @@ pub struct LinkedInPost {
     /// When a queued post is planned to go out, from the site's plan: `2026-11-02T09:00`.
     pub publish_at: Option<String>,
     pub body: String,
+    /// Its images, or its one video: files beside it, by name, as `media` lists them.
+    pub media: Vec<String>,
+}
+
+impl LinkedInPost {
+    /// Where one of its media files is.
+    pub fn media_path(&self, name: &str) -> PathBuf {
+        self.path.with_file_name(name)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

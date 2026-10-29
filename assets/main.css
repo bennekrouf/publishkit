@@ -522,6 +522,32 @@ select:focus { border-color: var(--blue); }
   background: #0a66c2; color: #fff; font-size: 9px; font-weight: 700; line-height: 1.4;
 }
 .mark-posted { flex-wrap: wrap; }
+.calendar-media { color: var(--text3); }
+.post-item-media { margin-left: 6px; color: var(--text3); }
+
+/* ── A LinkedIn post's images or video ── */
+.li-media { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+.li-media.single { grid-template-columns: 1fr; }
+.li-media-item {
+  width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--bg1);
+}
+.li-media.single .li-media-item { aspect-ratio: auto; max-height: 420px; object-fit: contain; }
+.li-media-file {
+  font-family: inherit; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px; padding: 10px; color: var(--text2); font-size: 11px;
+  word-break: break-all; text-align: center; cursor: pointer;
+}
+.li-media.single .li-media-file { aspect-ratio: 16 / 9; }
+.li-media-file.missing { cursor: default; color: var(--red); border-style: dashed; }
+.li-media-cell { position: relative; min-width: 0; }
+.li-media-remove {
+  position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0;
+  border: none; border-radius: 10px; background: rgba(0, 0, 0, .6); color: #fff;
+  font-size: 11px; line-height: 20px; cursor: pointer; opacity: 0; transition: opacity .15s;
+}
+.li-media-cell:hover .li-media-remove { opacity: 1; }
+.li-media-play { font-size: 22px; color: var(--text1); }
 .mark-posted input { font-size: 11px; padding: 2px 4px; }
 
 /* ── Checks before publishing ── */

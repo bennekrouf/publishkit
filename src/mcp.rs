@@ -38,6 +38,8 @@ draft live: it is dated today (or published_at, for a post that went out earlier
 command, if it has one, runs, so ask the user before publishing, and before delete_post. schedule_post sets a \
 draft's stage (idea, draft, review) and the date and time it is published by itself; ask the user before \
 scheduling. queue_linkedin adds a standalone LinkedIn post; with published_at it is saved as already posted. \
+A LinkedIn post can carry images or one video: media (file paths) on queue_linkedin or update_post, posted \
+posts included. \
 PublishKit never posts to LinkedIn itself: a LinkedIn draft's schedule is a reminder on the calendar. set_date \
 changes the date and time of a post, published ones included.";
 
@@ -236,6 +238,26 @@ fn linkedin(args: &Value) -> Result<bool, String> {
     }
 }
 
+/// `media`, when given: absolute paths of files to attach, or names of ones the post has.
+fn media(args: &Value) -> Result<Option<Vec<PathBuf>>, String> {
+    let Some(given) = args.get("media").filter(|m| !m.is_null()) else {
+        return Ok(None);
+    };
+    let items = given.as_array().ok_or("media is a list of file paths")?;
+    let mut paths = Vec::with_capacity(items.len());
+    for item in items {
+        let s = item.as_str().map(str::trim).unwrap_or("");
+        let path = PathBuf::from(s);
+        if s.is_empty() || !(path.is_absolute() || path.components().count() == 1) {
+            return Err(format!(
+                "{s:?} in media is neither an absolute path nor the name of a file the post has"
+            ));
+        }
+        paths.push(path);
+    }
+    Ok(Some(paths))
+}
+
 fn published(args: &Value) -> Result<bool, String> {
     match args["where"].as_str().unwrap_or("queue") {
         "queue" => Ok(false),
@@ -306,6 +328,7 @@ fn linkedin_row(p: &LinkedInPost) -> Value {
         "status": p.status,
         "publish_at": p.publish_at,
         "words": words(&p.body),
+        "media": p.media,
     })
 }
 
