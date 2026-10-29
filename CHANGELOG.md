@@ -130,6 +130,10 @@ user sees in the update prompt should all be accounted for.
 - On Windows, the Start menu, desktop shortcut and installer say PublishKit
   instead of Blog Manager. Shortcuts left from an earlier install under the old
   name are removed when you update.
+- The label beside the site switcher that said how PublishKit reads the site
+  (PublishKit folders, Hugo, Jekyll…) is now a folder button the size of the
+  other top-bar buttons. Hover it for the format; click it to change it in
+  Settings.
 - On Windows, PublishKit always installs for your user only, in
   `%LOCALAPPDATA%\Programs`, without asking. An update no longer moves it to
   Program Files because an old Blog Manager was once installed there, which
