@@ -1,6 +1,6 @@
 ---
 name: publishkit
-description: Drive PublishKit, the desktop app that keeps a website's blog as markdown files with drafts per language, a publishing queue, a schedule, and LinkedIn and X posts, through its MCP tools. Use this whenever the user mentions PublishKit, or asks to draft, queue, edit, translate, schedule or publish a blog post on their site, plan a content calendar, write LinkedIn or X posts or teasers for an article, or change the date of a post. Also use it when PublishKit's tools are missing and the user wants to connect the app.
+description: How to manage a blog with PublishKit, the desktop app that keeps a website's posts as markdown drafts per language with a publishing queue, a schedule, and LinkedIn and X posts. Read this skill before calling any publishkit tool (project, list_posts, get_post, queue_post, update_post, publish_post, schedule_post, queue_linkedin, queue_x, set_date, delete_post), because it has the site-voice rules, which actions go live and need the user's yes, and how to report drafts. Use it whenever the user mentions PublishKit, or asks to draft, queue, edit, translate, schedule, publish or delete a blog post on their site, plan a content calendar from what is already published, write or save LinkedIn or X posts or teasers, or change a post's date.
 ---
 
 # PublishKit
@@ -67,3 +67,22 @@ go live, then wait for a clear yes. A yes for one post does not cover the next.
 - Keep front matter fields the site already uses; don't invent new ones.
 - Don't invent facts, quotes, figures or customer names. Ask, or leave a
   clearly marked placeholder.
+
+## How to report back
+
+For a list of posts, use a table, newest first:
+
+| Date | Language | Stage | Title (or topic) | Length |
+|---|---|---|---|---|
+
+After a new draft, give its title, language, slug and stage, the first two
+lines of the body, and say where it waits (the queue or the calendar).
+
+Before `publish_post`, `schedule_post` or `delete_post`, show exactly what
+will happen in this form, then wait for the user's yes:
+
+> **Publish** "Title" (en), dated 30 Oct 2026. The site's publish command
+> runs afterwards.
+
+After publishing, say whether the site's publish command succeeded, and give
+the first lines of its error if it did not.
