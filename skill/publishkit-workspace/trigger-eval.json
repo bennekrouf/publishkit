@@ -1,0 +1,82 @@
+[
+ {
+  "query": "queue a draft for my blog about why we moved from Postgres to SQLite for the desktop apps, in my site's usual voice, english and french",
+  "should_trigger": true
+ },
+ {
+  "query": "what drafts do I have in review right now, and schedule the rust error handling one for next tuesday 9am",
+  "should_trigger": true
+ },
+ {
+  "query": "publish the 'dioxus 0.7 migration' post, it's been in review long enough",
+  "should_trigger": true
+ },
+ {
+  "query": "I wrote this linkedin post, save it as is and put it on the calendar for thursday: 'Shipped 8 desktop apps in Rust this year. Here's what broke...'",
+  "should_trigger": true
+ },
+ {
+  "query": "plan my blog content for november: look at what I've already published and suggest 4 posts that don't repeat",
+  "should_trigger": true
+ },
+ {
+  "query": "the post about api0 went out on oct 2 not oct 10, fix the date",
+  "should_trigger": true
+ },
+ {
+  "query": "translate my latest published post into german as a new draft",
+  "should_trigger": true
+ },
+ {
+  "query": "write the x teaser and linkedin teaser for the post on zero-copy parsing in rust",
+  "should_trigger": true
+ },
+ {
+  "query": "delete the old draft about tauri vs electron, I'm never finishing it",
+  "should_trigger": true
+ },
+ {
+  "query": "I want publishkit to write the post itself this time, generate one about MCP servers in desktop apps",
+  "should_trigger": true
+ },
+ {
+  "query": "write a 1500 word blog post about rust ownership for beginners",
+  "should_trigger": false
+ },
+ {
+  "query": "my next.js blog's build fails on a markdown file with a colon in the title front matter, fix it",
+  "should_trigger": false
+ },
+ {
+  "query": "how do I add RSS to my astro site",
+  "should_trigger": false
+ },
+ {
+  "query": "post this to my linkedin now: 'We're hiring a Rust dev in Geneva'",
+  "should_trigger": false
+ },
+ {
+  "query": "what's the best time of day to post on linkedin for a b2b audience",
+  "should_trigger": false
+ },
+ {
+  "query": "set up a github action that deploys my hugo site to netlify on every push to main",
+  "should_trigger": false
+ },
+ {
+  "query": "proofread this paragraph from my blog post: ...",
+  "should_trigger": false
+ },
+ {
+  "query": "compare ghost, wordpress and a static site generator for a developer blog",
+  "should_trigger": false
+ },
+ {
+  "query": "summarise this article for me: https://example.com/rust-2026-roadmap",
+  "should_trigger": false
+ },
+ {
+  "query": "write 5 tweet ideas about building indie software in switzerland",
+  "should_trigger": false
+ }
+]
