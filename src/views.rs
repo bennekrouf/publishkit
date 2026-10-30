@@ -1,11 +1,11 @@
 //! Whole-site views of the blog: the board, where drafts move from idea to review and get a
-//! date, and the calendar of what went out and what is scheduled, blog and LinkedIn. A post
+//! date, and the calendar of what went out and what is scheduled, blog, LinkedIn and X. A post
 //! opened from either is edited in its own tab.
 
 use crate::api;
 use crate::plan::{self, Stage};
 use crate::screens::{when_label, ContentMode};
-use crate::state::{load_posts, AppConfig, LinkedInPost, Post, ProjectConfig, ProjectPosts};
+use crate::state::{load_posts, AppConfig, Channel, Post, ProjectConfig, ProjectPosts, SocialPost};
 use chrono::{Datelike, NaiveDate};
 use dioxus::prelude::*;
 use std::collections::BTreeMap;
@@ -225,25 +225,25 @@ fn BoardCard(
     }
 }
 
-/// One entry on the calendar: a blog post or a LinkedIn post, out already or planned.
+/// One entry on the calendar: a blog post or a LinkedIn or X post, out already or planned.
 #[derive(Clone, PartialEq)]
 enum Item {
     Blog(Post),
-    LinkedIn(LinkedInPost),
+    Social(SocialPost),
 }
 
 impl Item {
     fn title(&self) -> &str {
         match self {
             Item::Blog(p) => &p.title,
-            Item::LinkedIn(p) => &p.topic,
+            Item::Social(p) => &p.topic,
         }
     }
 
     fn lang(&self) -> &str {
         match self {
             Item::Blog(p) => &p.lang,
-            Item::LinkedIn(p) => &p.lang,
+            Item::Social(p) => &p.lang,
         }
     }
 }
@@ -258,7 +258,7 @@ pub fn Calendar(
     editor_mode: Signal<bool>,
     content_mode: Signal<ContentMode>,
     active_lang: Signal<String>,
-    li_selected: Signal<Option<LinkedInPost>>,
+    social_selected: Signal<Option<SocialPost>>,
 ) -> Element {
     let today = chrono::Local::now().date_naive();
     let mut month = use_signal(|| (today.year(), today.month()));
@@ -296,12 +296,14 @@ pub fn Calendar(
         for post in shelf.queue {
             add(planned(&post.publish_at), Item::Blog(post), true);
         }
-        let shelf = all.linkedin(lang);
-        for post in shelf.published {
-            add(post.when, Item::LinkedIn(post), false);
-        }
-        for post in shelf.queue {
-            add(planned(&post.publish_at), Item::LinkedIn(post), true);
+        for channel in Channel::ALL {
+            let shelf = all.social(channel, lang);
+            for post in shelf.published {
+                add(post.when, Item::Social(post), false);
+            }
+            for post in shelf.queue {
+                add(planned(&post.publish_at), Item::Social(post), true);
+            }
         }
     }
     // Through the day: untimed posts first, then by time.
@@ -322,7 +324,7 @@ pub fn Calendar(
                 span { class: "calendar-title", "{first.format(\"%B %Y\")}" }
                 button { class: "btn-small", onclick: move |_| step(1), "›" }
                 button { class: "btn-small", onclick: move |_| month.set((today.year(), today.month())), "Today" }
-                span { class: "settings-hint", "Blog and LinkedIn posts on the day they went out; ⏱ scheduled drafts on the day they go out." }
+                span { class: "settings-hint", "Blog, LinkedIn and X posts on the day they went out; ⏱ scheduled drafts on the day they go out." }
             }
             div { class: "calendar-head",
                 for name in WEEKDAYS {
@@ -347,23 +349,25 @@ pub fn Calendar(
                                     {
                                         let lang = if multilingual { format!("{} · ", item.lang().to_uppercase()) } else { String::new() };
                                         let time = time.map(|t| t.format("%H:%M ").to_string()).unwrap_or_default();
-                                        let linkedin = matches!(item, Item::LinkedIn(_));
-                                        let class = match (scheduled, linkedin) {
-                                            (true, true) => "calendar-item scheduled linkedin",
-                                            (true, false) => "calendar-item scheduled",
-                                            (false, true) => "calendar-item linkedin",
-                                            (false, false) => "calendar-item",
-                                        };
-                                        let title = item.title().to_string();
-                                        let carries = match &item {
-                                            Item::LinkedIn(p) => crate::screens::media_label(&p.media),
+                                        let network = match &item {
+                                            Item::Social(p) => Some(p.channel),
                                             Item::Blog(_) => None,
                                         };
-                                        let tip = match (scheduled, linkedin) {
-                                            (true, true) => format!("LinkedIn, planned: {title}"),
-                                            (true, false) => format!("Scheduled: {title}"),
-                                            (false, true) => format!("Posted on LinkedIn: {title}"),
-                                            (false, false) => format!("Published: {title}"),
+                                        let class = format!(
+                                            "calendar-item{}{}",
+                                            if scheduled { " scheduled" } else { "" },
+                                            network.map(|c| format!(" {}", c.key())).unwrap_or_default()
+                                        );
+                                        let title = item.title().to_string();
+                                        let carries = match &item {
+                                            Item::Social(p) => crate::screens::media_label(&p.media),
+                                            Item::Blog(_) => None,
+                                        };
+                                        let tip = match (scheduled, network) {
+                                            (true, Some(c)) => format!("{}, planned: {title}", c.label()),
+                                            (true, None) => format!("Scheduled: {title}"),
+                                            (false, Some(c)) => format!("Posted on {}: {title}", c.label()),
+                                            (false, None) => format!("Published: {title}"),
                                         };
                                         let tip = match &carries {
                                             Some(label) => format!("{tip} ({label})"),
@@ -375,15 +379,15 @@ pub fn Calendar(
                                                 title: "{tip}",
                                                 onclick: move |_| match item.clone() {
                                                     Item::Blog(post) => open(post, selected, editor_mode, content_mode, active_lang),
-                                                    Item::LinkedIn(post) => {
-                                                        let mut li_selected = li_selected;
+                                                    Item::Social(post) => {
+                                                        let mut social_selected = social_selected;
                                                         let mut content_mode = content_mode;
-                                                        li_selected.set(Some(post));
-                                                        content_mode.set(ContentMode::LinkedIn);
+                                                        content_mode.set(ContentMode::Social(post.channel));
+                                                        social_selected.set(Some(post));
                                                     }
                                                 },
                                                 if scheduled { "⏱ " }
-                                                if linkedin { span { class: "calendar-in", "in" } }
+                                                if let Some(c) = network { span { class: "calendar-in {c.key()}", "{c.badge()}" } }
                                                 "{time}{lang}{title}"
                                                 if let Some(label) = carries { span { class: "calendar-media", " {label}" } }
                                             }

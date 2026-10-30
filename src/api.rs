@@ -1,6 +1,6 @@
 use crate::frontmatter::{self, Field, Format};
 use crate::plan::When;
-use crate::state::{language_name, Drafts, LlmProvider, ProjectConfig, SocialPosts};
+use crate::state::{language_name, Channel, Drafts, LlmProvider, ProjectConfig, SocialPosts};
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 mod files;
@@ -12,9 +12,14 @@ fn write_in(lang: &str) -> String {
     format!("Write entirely in {}.", language_name(lang))
 }
 
-pub async fn generate_linkedin_post(
+/// A LinkedIn or X post written by the model, from what it is about and the points to make;
+/// `link`, when there is one, ends up as it is, on a line of its own.
+#[allow(clippy::too_many_arguments)]
+pub async fn generate_social_post(
+    channel: Channel,
     topic: &str,
     angle: &str,
+    link: &str,
     lang: &str,
     provider: &LlmProvider,
     api_key: &str,
@@ -27,29 +32,174 @@ pub async fn generate_linkedin_post(
         &project_config.site_name
     };
 
-    let system = format!(
-        "You write LinkedIn posts for {company}'s company page, promoting its products. \
-        {lang_instruction} Professional but engaging tone, concrete value proposition, \
-        no corporate fluff. Max 3 hashtags. 4-8 short paragraphs/lines, easy to skim."
-    );
-    let user = format!(
-        "Write a LinkedIn post about: \"{topic}\"\n\
-        Angle / key points: {angle}\n\n\
-        Output ONLY the post text, ready to publish (no markdown headers, no frontmatter)."
-    );
-
-    call(provider, &system, &user, api_key).await
+    let system = match channel {
+        Channel::LinkedIn => format!(
+            "You write LinkedIn posts for {company}'s company page, promoting its products. \
+            {lang_instruction} Professional but engaging tone, concrete value proposition, \
+            no corporate fluff. Max 3 hashtags. 4-8 short paragraphs/lines, easy to skim."
+        ),
+        Channel::X => format!(
+            "You write posts on X for {company}. {lang_instruction} Punchy and concrete, one \
+            idea, no corporate fluff. At most 2 hashtags. At most 270 characters in all, any \
+            link included."
+        ),
+    };
+    let user = social_prompt(channel, topic, angle, link);
+    let text = call(provider, &system, &user, api_key).await?;
+    Ok(place_link(text.trim(), link.trim()))
 }
 
-pub fn save_linkedin_to_queue(
+/// What the model is asked for a LinkedIn or X post.
+fn social_prompt(channel: Channel, topic: &str, angle: &str, link: &str) -> String {
+    let link = link.trim();
+    // LinkedIn and X make a bare address clickable, and show no anchor text or markdown.
+    let link_rule = if link.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "Link: {link}\n\
+            Put this link exactly as given, on a line of its own near the end of the post. \
+            Plain text only: no markdown link, no angle brackets, no URL shortener, \
+            no other link.\n"
+        )
+    };
+    format!(
+        "Write a {} post about: \"{topic}\"\n\
+        Angle / key points: {angle}\n\
+        {link_rule}\n\
+        Output ONLY the post text, ready to publish (no markdown headers, no frontmatter).",
+        channel.label()
+    )
+}
+
+/// A written post with `link` as the networks show it: a markdown link or `<…>` around it
+/// undone, and the link added on its own line, before closing hashtags, when the model left it out.
+pub(crate) fn place_link(text: &str, link: &str) -> String {
+    if link.is_empty() {
+        return text.to_string();
+    }
+    let mut text = text.replace(&format!("<{link}>"), link);
+    // `[label](link)` becomes the bare link: LinkedIn and X would show the brackets as they are.
+    let target = format!("]({link})");
+    while let Some(end) = text.find(&target) {
+        let Some(start) = text[..end].rfind('[') else {
+            break;
+        };
+        text.replace_range(start..end + target.len(), link);
+    }
+    if text.contains(link) {
+        return text;
+    }
+    let lines: Vec<&str> = text.lines().collect();
+    let tags = lines
+        .iter()
+        .rev()
+        .take_while(|l| {
+            let l = l.trim();
+            l.is_empty() || l.split_whitespace().all(|w| w.starts_with('#'))
+        })
+        .count();
+    let (body, tail) = lines.split_at(lines.len() - tags);
+    let body = body.join("\n");
+    let tail = tail.join("\n");
+    let tail = tail.trim();
+    if tail.is_empty() {
+        format!("{}\n\n{link}", body.trim_end())
+    } else {
+        format!("{}\n\n{link}\n\n{tail}", body.trim_end())
+    }
+}
+
+/// A post's text cut where its web addresses are, as `(piece, is_link)`: the pieces, in order,
+/// make up the text as it is. An address ends at a space, and punctuation closing a sentence
+/// after it isn't part of it.
+pub fn split_links(text: &str) -> Vec<(&str, bool)> {
+    let mut pieces = Vec::new();
+    let mut from = 0;
+    let mut at = 0;
+    while let Some(i) = text[at..].find("http").map(|i| at + i) {
+        let rest = &text[i..];
+        let scheme = ["https://", "http://"]
+            .into_iter()
+            .find(|s| rest.starts_with(s));
+        // `xhttp://` is a word, not an address.
+        let after_word = text[..i]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_alphanumeric() || c == '/' || c == '@');
+        let (Some(scheme), false) = (scheme, after_word) else {
+            at = i + 4;
+            continue;
+        };
+        let len = rest
+            .find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"'))
+            .unwrap_or(rest.len());
+        let url = trim_url_end(&rest[..len]);
+        if url.len() <= scheme.len() {
+            at = i + scheme.len();
+            continue;
+        }
+        if from < i {
+            pieces.push((&text[from..i], false));
+        }
+        pieces.push((url, true));
+        from = i + url.len();
+        at = from;
+    }
+    if from < text.len() {
+        pieces.push((&text[from..], false));
+    }
+    pieces
+}
+
+/// An address without what closes the sentence after it: `.`, `,`, `!`, quotes, and a `)` or
+/// `]` it didn't open.
+fn trim_url_end(url: &str) -> &str {
+    let mut url = url;
+    loop {
+        let Some(last) = url.chars().next_back() else {
+            return url;
+        };
+        let unopened = |open: char, close: char| {
+            last == close && url.matches(close).count() > url.matches(open).count()
+        };
+        let drop = matches!(last, '.' | ',' | ';' | ':' | '!' | '?' | '\'' | '*' | '_')
+            || unopened('(', ')')
+            || unopened('[', ']');
+        if !drop {
+            return url;
+        }
+        url = &url[..url.len() - last.len_utf8()];
+    }
+}
+
+/// What a post written without a topic is listed as: its first line, cut at a word.
+pub fn topic_of(body: &str) -> String {
+    let line = body
+        .lines()
+        .map(|l| l.trim().trim_start_matches('#').trim())
+        .find(|l| !l.is_empty())
+        .unwrap_or_default();
+    if line.chars().count() <= 60 {
+        return line.to_string();
+    }
+    let cut: String = line.chars().take(60).collect();
+    match cut.rfind(' ') {
+        Some(i) if i > 20 => format!("{}…", &cut[..i]),
+        _ => format!("{cut}…"),
+    }
+}
+
+pub fn save_social_to_queue(
     project_path: &str,
     project_config: &ProjectConfig,
+    channel: Channel,
     topic: &str,
     lang: &str,
     body: &str,
 ) -> Result<String> {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let (queue_dir, _) = project_config.resolve_linkedin_paths(project_path, lang);
+    let (queue_dir, _) = project_config.resolve_social_paths(project_path, channel, lang);
     std::fs::create_dir_all(&queue_dir)?;
 
     let content = frontmatter::build(
@@ -62,21 +212,33 @@ pub fn save_linkedin_to_queue(
         ],
         body,
     );
-    let path = free_path(&queue_dir, &slugify(topic), "md");
+    let slug = Some(slugify(topic))
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "post".into());
+    let path = free_path(&queue_dir, &slug, "md");
     std::fs::write(&path, content)?;
     Ok(path.to_string_lossy().to_string())
 }
 
-/// Moves a LinkedIn draft to the posted ones, dated `at` when it went out earlier (posted
-/// on LinkedIn first, saved here after), else today.
-pub fn publish_linkedin_post(
+/// Replaces a post's text, its front matter kept.
+pub fn set_body(path: &Path, body: &str) -> Result<()> {
+    let content = std::fs::read_to_string(path).with_context(|| format!("{}", path.display()))?;
+    std::fs::write(path, frontmatter::with_body(&content, body))
+        .with_context(|| format!("{}", path.display()))?;
+    Ok(())
+}
+
+/// Moves a LinkedIn or X draft to the posted ones, dated `at` when it went out earlier (posted
+/// on the network first, saved here after), else today.
+pub fn publish_social_post(
     project_path: &str,
     project_config: &ProjectConfig,
+    channel: Channel,
     lang: &str,
     filename: &str,
     at: Option<When>,
 ) -> Result<()> {
-    let (queue, published) = project_config.resolve_linkedin_paths(project_path, lang);
+    let (queue, published) = project_config.resolve_social_paths(project_path, channel, lang);
     let src = queue.join(filename);
     std::fs::create_dir_all(&published)?;
     let dst = published.join(filename);
@@ -88,7 +250,7 @@ pub fn publish_linkedin_post(
         &Field::Text("published".into()),
         Format::Yaml,
     );
-    let date = at.map_or_else(|| today_like(""), |w| w.linkedin_date());
+    let date = at.map_or_else(|| today_like(""), |w| w.social_date());
     let updated = frontmatter::set(&updated, "date", &Field::Text(date), Format::Yaml);
 
     if dst.exists() {
@@ -97,17 +259,17 @@ pub fn publish_linkedin_post(
     let updated = move_media(&updated, &queue, &published)?;
     std::fs::write(&dst, updated)?;
     std::fs::remove_file(&src)?;
-    crate::plan::forget_linkedin(project_path, lang, filename);
+    crate::plan::forget_social(project_path, channel, lang, filename);
     Ok(())
 }
 
-/// Sets the date of a post, queued or published, blog or LinkedIn: written as that kind of
+/// Sets the date of a post, queued or published, blog or social: written as that kind of
 /// post keeps it. A blog post's file name keeps its date prefix: links to it may use it.
-pub fn set_date(path: &Path, linkedin: bool, when: When, default: Format) -> Result<()> {
+pub fn set_date(path: &Path, social: bool, when: When, default: Format) -> Result<()> {
     let content = std::fs::read_to_string(path).with_context(|| format!("{}", path.display()))?;
     let format = frontmatter::split(&content).map_or(default, |p| p.format);
-    let date = if linkedin {
-        when.linkedin_date()
+    let date = if social {
+        when.social_date()
     } else {
         let previous =
             frontmatter::text(&frontmatter::fields(&content), "date").unwrap_or_default();
@@ -118,16 +280,17 @@ pub fn set_date(path: &Path, linkedin: bool, when: When, default: Format) -> Res
     Ok(())
 }
 
-pub fn delete_linkedin_queued(
+pub fn delete_social_queued(
     project_path: &str,
     project_config: &ProjectConfig,
+    channel: Channel,
     lang: &str,
     filename: &str,
 ) -> Result<()> {
-    let (queue, _) = project_config.resolve_linkedin_paths(project_path, lang);
+    let (queue, _) = project_config.resolve_social_paths(project_path, channel, lang);
     delete_media(&queue.join(filename));
     std::fs::remove_file(queue.join(filename))?;
-    crate::plan::forget_linkedin(project_path, lang, filename);
+    crate::plan::forget_social(project_path, channel, lang, filename);
     Ok(())
 }
 

@@ -12,7 +12,7 @@
 use crate::api;
 use crate::frontmatter;
 use crate::plan::{self, Stage};
-use crate::state::{load_posts, AppConfig, LinkedInPost, Post, ProjectConfig, SocialPosts};
+use crate::state::{load_posts, AppConfig, Channel, Post, ProjectConfig, SocialPost, SocialPosts};
 use dioxus::prelude::*;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -29,19 +29,20 @@ use posts::*;
 const PROTOCOL: &str = "2025-06-18";
 
 const INSTRUCTIONS: &str = "PublishKit manages a website's blog as markdown files: drafts wait, per language, \
-until they are published, and LinkedIn posts the same way. Start with project, which gives the site, the \
-framework it is built with, its languages and how many posts each has; tools default to the project open in \
-PublishKit. list_posts and get_post read posts. queue_post adds a draft: write its body yourself in the site's \
-voice (project gives the site's own writing brief), or pass generate: true to have PublishKit's configured model \
-write it. update_post edits a draft; set_social sets the LinkedIn and X teasers of a post. publish_post makes a \
-draft live: it is dated today (or published_at, for a post that went out earlier) and the site's publish \
-command, if it has one, runs, so ask the user before publishing, and before delete_post. schedule_post sets a \
-draft's stage (idea, draft, review) and the date and time it is published by itself; ask the user before \
-scheduling. queue_linkedin adds a standalone LinkedIn post; with published_at it is saved as already posted. \
-A LinkedIn post can carry images or one video: media (file paths) on queue_linkedin or update_post, posted \
-posts included. \
-PublishKit never posts to LinkedIn itself: a LinkedIn draft's schedule is a reminder on the calendar. set_date \
-changes the date and time of a post, published ones included.";
+until they are published; LinkedIn and X posts are kept the same way, each on its own, not tied to a blog post. \
+Start with project, which gives the site, the framework it is built with, its languages and how many posts each \
+has; tools default to the project open in PublishKit. list_posts and get_post read posts (kind blog, linkedin or \
+x). queue_post adds a blog draft: write its body yourself in the site's voice (project gives the site's own \
+writing brief), or pass generate: true to have PublishKit's configured model write it. queue_linkedin and \
+queue_x add a LinkedIn or X post: the user usually writes these, so save the text they give as it is, and write \
+or generate one only when asked; with published_at it is saved as already posted. update_post edits a draft; \
+set_social sets the older LinkedIn and X teasers kept with a blog post. publish_post makes a draft live: it is \
+dated today (or published_at, for a post that went out earlier) and the site's publish command, if it has one, \
+runs, so ask the user before publishing, and before delete_post. schedule_post sets a draft's stage (idea, \
+draft, review) and the date and time it is published by itself; ask the user before scheduling. A LinkedIn or \
+X post can carry images or one video: media (file paths) on queue_linkedin, queue_x or update_post, posted posts \
+included. PublishKit never posts to LinkedIn or X itself: such a draft's schedule is a reminder on the calendar. \
+set_date changes the date and time of a post, published ones included.";
 
 pub fn serve() {
     let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -145,7 +146,8 @@ async fn call(name: &str, args: &Value) -> Result<Value, String> {
         "schedule_post" => schedule(args),
         "set_date" => set_date(args),
         "crosspost_post" => crosspost(args).await,
-        "queue_linkedin" => queue_linkedin(args).await,
+        "queue_linkedin" => queue_social(args, Channel::LinkedIn).await,
+        "queue_x" => queue_social(args, Channel::X).await,
         _ => Err(format!("no tool {name}")),
     }
 }
@@ -230,12 +232,18 @@ fn filename(args: &Value) -> Result<String, String> {
     Ok(name)
 }
 
-fn linkedin(args: &Value) -> Result<bool, String> {
+/// `kind`: `None` for the blog, else the network.
+fn kind(args: &Value) -> Result<Option<Channel>, String> {
     match args["kind"].as_str().unwrap_or("blog") {
-        "blog" => Ok(false),
-        "linkedin" => Ok(true),
-        other => Err(format!("kind is blog or linkedin, not {other}")),
+        "blog" => Ok(None),
+        other => Channel::from_key(other)
+            .map(Some)
+            .ok_or(format!("kind is blog, linkedin or x, not {other}")),
     }
+}
+
+fn kind_key(kind: Option<Channel>) -> &'static str {
+    kind.map_or("blog", Channel::key)
 }
 
 /// `media`, when given: absolute paths of files to attach, or names of ones the post has.
@@ -271,13 +279,12 @@ fn folder(
     project: &str,
     cfg: &ProjectConfig,
     lang: &str,
-    linkedin: bool,
+    kind: Option<Channel>,
     published: bool,
 ) -> PathBuf {
-    let (queue, done) = if linkedin {
-        cfg.resolve_linkedin_paths(project, lang)
-    } else {
-        cfg.resolve_paths(project, lang)
+    let (queue, done) = match kind {
+        Some(channel) => cfg.resolve_social_paths(project, channel, lang),
+        None => cfg.resolve_paths(project, lang),
     };
     if published {
         done
@@ -319,7 +326,7 @@ fn post_row(p: &Post) -> Value {
     })
 }
 
-fn linkedin_row(p: &LinkedInPost) -> Value {
+fn social_row(p: &SocialPost) -> Value {
     json!({
         "filename": p.filename,
         "topic": p.topic,
@@ -328,6 +335,7 @@ fn linkedin_row(p: &LinkedInPost) -> Value {
         "status": p.status,
         "publish_at": p.publish_at,
         "words": words(&p.body),
+        "characters": p.body.trim().chars().count(),
         "media": p.media,
     })
 }
@@ -340,16 +348,17 @@ fn project_info(args: &Value) -> Result<Value, String> {
     let posts = load_posts(&project);
     let mut counts = serde_json::Map::new();
     for lang in &posts.languages {
-        let (blog, linkedin) = (posts.blog(lang), posts.linkedin(lang));
-        counts.insert(
-            lang.clone(),
-            json!({
-                "drafts": blog.queue.len(),
-                "published": blog.published.len(),
-                "linkedin_drafts": linkedin.queue.len(),
-                "linkedin_published": linkedin.published.len(),
-            }),
-        );
+        let blog = posts.blog(lang);
+        let mut count = json!({
+            "drafts": blog.queue.len(),
+            "published": blog.published.len(),
+        });
+        for channel in Channel::ALL {
+            let shelf = posts.social(channel, lang);
+            count[format!("{}_drafts", channel.key())] = json!(shelf.queue.len());
+            count[format!("{}_published", channel.key())] = json!(shelf.published.len());
+        }
+        counts.insert(lang.clone(), count);
     }
     let app = AppConfig::load();
     let other_sites: Vec<Value> = app
@@ -377,16 +386,16 @@ fn project_info(args: &Value) -> Result<Value, String> {
 }
 
 /// Posts of one kind and place in one language.
-fn posts_in(project: &str, lang: &str, linkedin: bool, published: bool) -> Vec<Value> {
+fn posts_in(project: &str, lang: &str, kind: Option<Channel>, published: bool) -> Vec<Value> {
     let all = load_posts(project);
-    if linkedin {
-        let shelf = all.linkedin(lang);
+    if let Some(channel) = kind {
+        let shelf = all.social(channel, lang);
         let posts = if published {
             &shelf.published
         } else {
             &shelf.queue
         };
-        posts.iter().map(linkedin_row).collect()
+        posts.iter().map(social_row).collect()
     } else {
         let shelf = all.blog(lang);
         let posts = if published {
@@ -405,11 +414,11 @@ fn draft_path(
     cfg: &ProjectConfig,
     lang: &str,
     name: &str,
-    linkedin: bool,
+    kind: Option<Channel>,
 ) -> Result<PathBuf, String> {
-    let path = folder(project, cfg, lang, linkedin, false).join(name);
+    let path = folder(project, cfg, lang, kind, false).join(name);
     let is_draft = |p: &Path| {
-        linkedin
+        kind.is_some()
             || cfg.drafts == crate::state::Drafts::Folder
             || std::fs::read_to_string(p)
                 .is_ok_and(|c| frontmatter::flag(&frontmatter::fields(&c), "draft") == Some(true))

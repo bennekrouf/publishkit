@@ -139,18 +139,26 @@ impl ProjectConfig {
         (root.join("queue"), root.join("blog"))
     }
 
-    /// Paths for standalone LinkedIn posts: `{linkedin_dir}/{lang}/{queue,published}`, or
-    /// content/{lang}/linkedin/{queue,published}.
-    pub fn resolve_linkedin_paths(&self, project_path: &str, lang: &str) -> (PathBuf, PathBuf) {
+    /// Paths for a network's posts: `{linkedin_dir}/{lang}/{queue,published}`, or
+    /// content/{lang}/linkedin/{queue,published}; X's in `x`, beside LinkedIn's folder.
+    pub fn resolve_social_paths(
+        &self,
+        project_path: &str,
+        channel: Channel,
+        lang: &str,
+    ) -> (PathBuf, PathBuf) {
         let root = if self.linkedin_dir.is_empty() {
             PathBuf::from(project_path)
                 .join("content")
                 .join(lang)
-                .join("linkedin")
+                .join(channel.key())
         } else {
-            PathBuf::from(project_path)
-                .join(native(&self.linkedin_dir))
-                .join(lang)
+            let dir = native(&self.linkedin_dir);
+            let dir = match channel {
+                Channel::LinkedIn => dir,
+                _ => dir.with_file_name(channel.key()),
+            };
+            PathBuf::from(project_path).join(dir).join(lang)
         };
         (root.join("queue"), root.join("published"))
     }
