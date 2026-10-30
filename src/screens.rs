@@ -1,7 +1,7 @@
 use crate::api;
 use crate::state::{
-    content_stamp, load_posts, site_label, AppConfig, Drafts, LinkedInPost, LlmProvider, Post,
-    Preset, ProjectConfig, ProjectPosts,
+    content_stamp, load_posts, site_label, AppConfig, Channel, Drafts, LlmProvider, Post, Preset,
+    ProjectConfig, ProjectPosts, SocialPost,
 };
 use desktop_kit::ui::{Header, Theme};
 use dioxus::prelude::*;
@@ -10,18 +10,66 @@ mod posts;
 use posts::*;
 mod panels;
 use panels::*;
-mod linkedin;
-pub(crate) use linkedin::media_label;
-use linkedin::*;
+mod channels;
+pub(crate) use channels::media_label;
+use channels::*;
 mod settings;
 use settings::*;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ContentMode {
     Blog,
+    /// A network's own posts, each written for it, none tied to a blog post.
+    Social(Channel),
     Board,
     Calendar,
-    LinkedIn,
+}
+
+impl ContentMode {
+    /// The tabs, in the top bar's order.
+    const ALL: [ContentMode; 5] = [
+        ContentMode::Blog,
+        ContentMode::Social(Channel::LinkedIn),
+        ContentMode::Social(Channel::X),
+        ContentMode::Board,
+        ContentMode::Calendar,
+    ];
+
+    fn key(self) -> &'static str {
+        match self {
+            ContentMode::Blog => "blog",
+            ContentMode::Social(channel) => channel.key(),
+            ContentMode::Board => "board",
+            ContentMode::Calendar => "calendar",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            ContentMode::Blog => "Blog",
+            ContentMode::Social(channel) => channel.label(),
+            ContentMode::Board => "Board",
+            ContentMode::Calendar => "Calendar",
+        }
+    }
+
+    fn from_key(key: &str) -> Option<ContentMode> {
+        ContentMode::ALL.into_iter().find(|m| m.key() == key)
+    }
+}
+
+/// A LinkedIn or X post begun from elsewhere, a blog post's Share button: the network's form
+/// opens filled with it.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Compose {
+    pub channel: Channel,
+    pub lang: String,
+    /// For the list, and for the model when it is asked to write it.
+    pub topic: String,
+    pub angle: String,
+    /// The address the model puts in the post, on a line of its own.
+    pub link: String,
+    pub body: String,
 }
 
 // ── Root ─────────────────────────────────────────────────────────────────────
@@ -37,9 +85,28 @@ pub fn App() -> Element {
     let selected = use_signal(|| None::<Post>);
     let editor_mode = use_signal(|| false);
     let show_settings = use_signal(|| false);
-    let content_mode = use_signal(|| ContentMode::Blog);
-    let li_selected = use_signal(|| None::<LinkedInPost>);
+    // The tab open last time; the blog the first time.
+    let content_mode = use_signal(|| {
+        config
+            .peek()
+            .last_tab
+            .as_deref()
+            .and_then(ContentMode::from_key)
+            .unwrap_or(ContentMode::Blog)
+    });
+    let social_selected = use_signal(|| None::<SocialPost>);
     let theme = desktop_kit::ui::use_theme();
+
+    // Remembered, however the tab changes: a click on it, or a post opened from the calendar.
+    let mut config_w = config;
+    use_effect(move || {
+        let key = content_mode.read().key();
+        if config_w.peek().last_tab.as_deref() != Some(key) {
+            let mut cfg = config_w.write();
+            cfg.last_tab = Some(key.to_string());
+            cfg.save();
+        }
+    });
 
     // PublishKit Pro: checked with api0 at start, then once a day.
     let pro = desktop_kit::ui::use_pro();
@@ -55,7 +122,7 @@ pub fn App() -> Element {
         desktop_kit::ui::Banners { statistics: true }
         desktop_kit::ui::ProWindow { pro, pitch: crate::pro::pitch() }
         if has_project {
-            MainLayout { config, posts, selected, editor_mode, show_settings, content_mode, li_selected, theme }
+            MainLayout { config, posts, selected, editor_mode, show_settings, content_mode, social_selected, theme }
         } else {
             SetupScreen { config, posts, selected, editor_mode }
         }
@@ -264,10 +331,11 @@ fn MainLayout(
     editor_mode: Signal<bool>,
     show_settings: Signal<bool>,
     content_mode: Signal<ContentMode>,
-    li_selected: Signal<Option<LinkedInPost>>,
+    social_selected: Signal<Option<SocialPost>>,
     theme: Theme,
 ) -> Element {
     let mut show_mcp = use_signal(|| false);
+    let compose = use_signal(|| None::<Compose>);
     let pro = use_context::<desktop_kit::ui::Pro>();
     let active_lang = use_signal(String::new);
     let mut notice = use_signal(String::new);
@@ -413,12 +481,12 @@ fn MainLayout(
                     }
                 }
                 div { class: "kit-tabs",
-                    for (mode, name) in [(ContentMode::Blog, "Blog"), (ContentMode::Board, "Board"), (ContentMode::Calendar, "Calendar"), (ContentMode::LinkedIn, "LinkedIn")] {
+                    for mode in ContentMode::ALL {
                         button {
-                            key: "{name}",
+                            key: "{mode.key()}",
                             class: if *content_mode.read() == mode { "kit-tab kit-on" } else { "kit-tab" },
                             onclick: move |_| *content_mode.write() = mode,
-                            "{name}"
+                            "{mode.label()}"
                         }
                     }
                 }
@@ -444,20 +512,23 @@ fn MainLayout(
                             PostList { config, posts, selected, active_lang, notice }
                             PanelResizer { resizing, left_width, config }
                             CenterPanel { config, posts, selected, editor_mode }
-                            PreviewPanel { selected, config }
+                            PreviewPanel { selected, config, content_mode, compose }
                         }
                     },
                     ContentMode::Board => rsx! {
                         crate::views::Board { config, posts, selected, editor_mode, content_mode, active_lang, notice }
                     },
                     ContentMode::Calendar => rsx! {
-                        crate::views::Calendar { posts, selected, editor_mode, content_mode, active_lang, li_selected }
+                        crate::views::Calendar { posts, selected, editor_mode, content_mode, active_lang, social_selected }
                     },
-                    ContentMode::LinkedIn => rsx! {
-                        LinkedInList { config, posts, li_selected }
-                        PanelResizer { resizing, left_width, config }
-                        LinkedInCenterPanel { config, posts }
-                        LinkedInPreviewPanel { config, posts, li_selected }
+                    ContentMode::Social(channel) => rsx! {
+                        // Made anew per network and site: X's form never shows LinkedIn's text.
+                        Fragment { key: "{site_key}-{channel.key()}",
+                            SocialList { channel, config, posts, selected: social_selected }
+                            PanelResizer { resizing, left_width, config }
+                            SocialCenterPanel { channel, config, posts, selected: social_selected, compose }
+                            SocialPreviewPanel { channel, config, posts, selected: social_selected }
+                        }
                     },
                 }
             }
@@ -527,12 +598,6 @@ const LEFT_PANEL_MAX: f64 = 640.0;
 // ── Center panel ──────────────────────────────────────────────────────────────
 
 // ── Right panel — preview ──────────────────────────────────────────────────────
-
-// ── LinkedIn: left panel ─────────────────────────────────────────────────────
-
-// ── LinkedIn: center panel — generate ────────────────────────────────────────
-
-// ── LinkedIn: right panel — preview ──────────────────────────────────────────
 
 pub(crate) fn copy_to_clipboard(text: &str) {
     // Dioxus desktop runs in a webview — use JS clipboard API via document eval

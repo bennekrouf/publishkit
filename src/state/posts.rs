@@ -32,8 +32,11 @@ pub fn content_stamp(project_path: &str) -> Vec<(PathBuf, std::time::SystemTime)
     let mut dirs = Vec::new();
     for lang in config.languages() {
         let (queue, blog) = config.resolve_paths(project_path, &lang);
-        let (li_queue, li_published) = config.resolve_linkedin_paths(project_path, &lang);
-        dirs.extend([queue, blog, li_queue, li_published]);
+        dirs.extend([queue, blog]);
+        for channel in Channel::ALL {
+            let (queue, published) = config.resolve_social_paths(project_path, channel, &lang);
+            dirs.extend([queue, published]);
+        }
     }
     dirs.sort();
     dirs.dedup();
@@ -109,21 +112,20 @@ pub fn load_posts(project_path: &str) -> ProjectPosts {
             post.publish_at = entry.publish_at;
         }
         posts.blog.insert(lang.clone(), shelf);
-        let (li_queue, li_published) = config.resolve_linkedin_paths(project_path, lang);
-        let mut li_queue = read_linkedin_posts(&li_queue, lang);
-        for post in &mut li_queue {
-            post.publish_at = plan
-                .linkedin
-                .get(&format!("{lang}/{}", post.filename))
-                .and_then(|e| e.publish_at.clone());
+        for channel in Channel::ALL {
+            let (queue, published) = config.resolve_social_paths(project_path, channel, lang);
+            let mut queue = read_social_posts(&queue, channel, lang);
+            for post in &mut queue {
+                post.publish_at = plan.social_at(channel, lang, &post.filename);
+            }
+            posts.social.entry(channel).or_default().insert(
+                lang.clone(),
+                Shelf {
+                    queue,
+                    published: read_social_posts(&published, channel, lang),
+                },
+            );
         }
-        posts.linkedin.insert(
-            lang.clone(),
-            Shelf {
-                queue: li_queue,
-                published: read_linkedin_posts(&li_published, lang),
-            },
-        );
     }
     posts
 }
@@ -172,20 +174,20 @@ pub fn post_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-pub(super) fn read_linkedin_posts(dir: &Path, lang: &str) -> Vec<LinkedInPost> {
+pub(super) fn read_social_posts(dir: &Path, channel: Channel, lang: &str) -> Vec<SocialPost> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return vec![];
     };
-    let mut posts: Vec<LinkedInPost> = entries
+    let mut posts: Vec<SocialPost> = entries
         .filter_map(|e| e.ok())
         .filter(|e| is_post_file(&e.path()))
-        .filter_map(|e| parse_linkedin_post(e.path(), lang))
+        .filter_map(|e| parse_social_post(e.path(), channel, lang))
         .collect();
     posts.sort_by(|a, b| b.when.cmp(&a.when).then(b.date.cmp(&a.date)));
     posts
 }
 
-pub(super) fn parse_linkedin_post(path: PathBuf, lang: &str) -> Option<LinkedInPost> {
+pub(super) fn parse_social_post(path: PathBuf, channel: Channel, lang: &str) -> Option<SocialPost> {
     let full_content = std::fs::read_to_string(&path).ok()?;
     let filename = path.file_name()?.to_string_lossy().to_string();
     let fields = frontmatter::fields(&full_content);
@@ -195,7 +197,8 @@ pub(super) fn parse_linkedin_post(path: PathBuf, lang: &str) -> Option<LinkedInP
     let status = frontmatter::text(&fields, "status").unwrap_or_else(|| "draft".to_string());
     let body = frontmatter::body(&full_content).to_string();
 
-    Some(LinkedInPost {
+    Some(SocialPost {
+        channel,
         path,
         filename,
         topic,

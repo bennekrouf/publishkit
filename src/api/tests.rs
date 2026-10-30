@@ -1,5 +1,5 @@
 use super::*;
-use crate::state::{load_posts, Preset};
+use crate::state::{load_posts, Channel, Preset};
 
 fn site(files: &[(&str, &str)]) -> (PathBuf, String) {
     // A folder of its own per test: tests run in parallel, and a clock can repeat.
@@ -251,26 +251,38 @@ fn a_linkedin_post_marked_as_posted_keeps_the_date_and_time_it_went_out() {
         "---\ntopic: \"IDE\"\ndate: \"2026-10-20\"\nlang: \"en\"\nstatus: \"draft\"\n---\nBody",
     )]);
     let cfg = ProjectConfig::load(&project);
-    crate::plan::plan_linkedin(&project, "en", "ide.md", Some("2026-10-16T09:00".into())).unwrap();
+    crate::plan::plan_social(
+        &project,
+        Channel::LinkedIn,
+        "en",
+        "ide.md",
+        Some("2026-10-16T09:00".into()),
+    )
+    .unwrap();
     assert_eq!(
-        load_posts(&project).linkedin("en").queue[0]
+        load_posts(&project).social(Channel::LinkedIn, "en").queue[0]
             .publish_at
             .as_deref(),
         Some("2026-10-16T09:00")
     );
     let at = crate::plan::When::parse("2026-10-16T09:00");
-    publish_linkedin_post(&project, &cfg, "en", "ide.md", at).unwrap();
+    publish_social_post(&project, &cfg, Channel::LinkedIn, "en", "ide.md", at).unwrap();
     let posted =
         std::fs::read_to_string(root.join("content/en/linkedin/published/ide.md")).unwrap();
     assert!(posted.contains("date: \"2026-10-16T09:00\""), "{posted}");
     assert!(posted.contains("status: \"published\""), "{posted}");
-    let post = &load_posts(&project).linkedin("en").published[0];
+    let post = &load_posts(&project)
+        .social(Channel::LinkedIn, "en")
+        .published[0];
     assert_eq!(
         post.when.and_then(|w| w.time_label()).as_deref(),
         Some("09:00")
     );
     // Posted, it is no longer planned.
-    assert_eq!(crate::plan::linkedin_at(&project, "en", "ide.md"), None);
+    assert_eq!(
+        crate::plan::social_at(&project, Channel::LinkedIn, "en", "ide.md"),
+        None
+    );
 }
 
 #[test]
@@ -327,31 +339,43 @@ fn a_linkedin_posts_media_sit_beside_it_and_go_where_it_goes() {
     ]);
     let cfg = ProjectConfig::load(&project);
     let post = root.join("content/en/linkedin/queue/ide.md");
-    let names = set_media(&post, &[root.join("in/Cover.png"), root.join("in/two.jpg")]).unwrap();
+    let names = set_media(
+        &post,
+        Channel::LinkedIn,
+        &[root.join("in/Cover.png"), root.join("in/two.jpg")],
+    )
+    .unwrap();
     assert_eq!(names, ["cover.png", "two.jpg"]);
     assert!(root.join("content/en/linkedin/queue/two.jpg").is_file());
-    assert_eq!(load_posts(&project).linkedin("en").queue[0].media, names);
+    assert_eq!(
+        load_posts(&project).social(Channel::LinkedIn, "en").queue[0].media,
+        names
+    );
 
     // Images or one video, not both; a name it has stays, the one left out goes.
     assert!(set_media(
         &post,
+        Channel::LinkedIn,
         &[PathBuf::from("cover.png"), root.join("in/clip.mp4")]
     )
     .is_err());
     assert_eq!(
-        set_media(&post, &[PathBuf::from("two.jpg")]).unwrap(),
+        set_media(&post, Channel::LinkedIn, &[PathBuf::from("two.jpg")]).unwrap(),
         ["two.jpg"]
     );
     assert!(!root.join("content/en/linkedin/queue/cover.png").exists());
     let names = set_media(
         &post,
+        Channel::LinkedIn,
         &[root.join("in/Cover.png"), PathBuf::from("two.jpg")],
     )
     .unwrap();
     assert_eq!(names, ["cover.png", "two.jpg"]);
 
-    publish_linkedin_post(&project, &cfg, "en", "ide.md", None).unwrap();
-    let posted = &load_posts(&project).linkedin("en").published;
+    publish_social_post(&project, &cfg, Channel::LinkedIn, "en", "ide.md", None).unwrap();
+    let posted = &load_posts(&project)
+        .social(Channel::LinkedIn, "en")
+        .published;
     let posted = posted.iter().find(|p| p.filename == "ide.md").unwrap();
     assert_eq!(posted.media, ["cover-2.png", "two.jpg"]);
     assert_eq!(
@@ -367,11 +391,11 @@ fn a_linkedin_posts_media_sit_beside_it_and_go_where_it_goes() {
     // Posted already: the video replaces the images, and [] takes it off again.
     let path = posted.path.clone();
     assert_eq!(
-        set_media(&path, &[root.join("in/clip.mp4")]).unwrap(),
+        set_media(&path, Channel::LinkedIn, &[root.join("in/clip.mp4")]).unwrap(),
         ["clip.mp4"]
     );
     assert!(!root.join("content/en/linkedin/published/two.jpg").exists());
-    assert!(set_media(&path, &[]).unwrap().is_empty());
+    assert!(set_media(&path, Channel::LinkedIn, &[]).unwrap().is_empty());
     let content = std::fs::read_to_string(&path).unwrap();
     assert!(!content.contains("media"), "{content}");
 }
@@ -387,15 +411,141 @@ fn deleting_a_linkedin_draft_deletes_its_media() {
         ("content/en/linkedin/queue/other.gif", "gif"),
     ]);
     let cfg = ProjectConfig::load(&project);
-    delete_linkedin_queued(&project, &cfg, "en", "ide.md").unwrap();
+    delete_social_queued(&project, &cfg, Channel::LinkedIn, "en", "ide.md").unwrap();
     assert!(!root.join("content/en/linkedin/queue/a.gif").exists());
     assert!(root.join("content/en/linkedin/queue/other.gif").exists());
 }
 
 #[test]
-fn a_linkedin_post_takes_at_most_twenty_images() {
+fn a_post_takes_as_many_images_as_its_network() {
     let (root, _) = site(&[("q/p.md", "---\ntopic: \"P\"\n---\nBody"), ("x.png", "png")]);
-    let many = vec![root.join("x.png"); MAX_IMAGES + 1];
-    assert!(set_media(&root.join("q/p.md"), &many).is_err());
-    assert!(set_media(&root.join("q/p.md"), &[root.join("notes.txt")]).is_err());
+    let post = root.join("q/p.md");
+    let many = vec![root.join("x.png"); 21];
+    assert!(set_media(&post, Channel::LinkedIn, &many).is_err());
+    assert!(set_media(&post, Channel::LinkedIn, &[root.join("notes.txt")]).is_err());
+    let five = vec![root.join("x.png"); 5];
+    let err = set_media(&post, Channel::X, &five).unwrap_err().to_string();
+    assert!(err.contains("X takes at most 4 images"), "{err}");
+    assert_eq!(set_media(&post, Channel::X, &five[..4]).unwrap().len(), 4);
+}
+
+#[test]
+fn an_x_post_is_kept_beside_linkedin_and_listed_on_its_own() {
+    let (root, project) = site(&[("content/en/queue/.keep", "")]);
+    let cfg = ProjectConfig::load(&project);
+    let body = "Shipped: export to PDF.\n\nhttps://site.org/en/blog/export";
+    let path =
+        save_social_to_queue(&project, &cfg, Channel::X, &topic_of(body), "en", body).unwrap();
+    assert!(
+        Path::new(&path).ends_with("content/en/x/queue/shipped-export-to-pdf.md"),
+        "{path}"
+    );
+    // Where LinkedIn's posts are kept out of the site's content, X's are too, beside them.
+    let hugo = ProjectConfig {
+        linkedin_dir: ".publishkit/linkedin".into(),
+        ..cfg.clone()
+    };
+    assert_eq!(
+        hugo.resolve_social_paths(&project, Channel::X, "en").0,
+        root.join(".publishkit").join("x").join("en").join("queue")
+    );
+    let posts = load_posts(&project);
+    assert!(posts.social(Channel::LinkedIn, "en").queue.is_empty());
+    let queued = &posts.social(Channel::X, "en").queue[0];
+    assert_eq!(queued.channel, Channel::X);
+    assert_eq!(queued.topic, "Shipped: export to PDF.");
+    assert_eq!(queued.body.trim(), body);
+
+    set_body(&queued.path, "Export to PDF is out.").unwrap();
+    let content = std::fs::read_to_string(&queued.path).unwrap();
+    assert!(content.starts_with("---\ntopic:"), "{content}");
+    assert!(
+        content.ends_with("---\n\nExport to PDF is out."),
+        "{content}"
+    );
+
+    crate::plan::plan_social(
+        &project,
+        Channel::X,
+        "en",
+        &queued.filename,
+        Some("2026-11-02T09:00".into()),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::plan::social_at(&project, Channel::LinkedIn, "en", &queued.filename),
+        None
+    );
+    publish_social_post(&project, &cfg, Channel::X, "en", &queued.filename, None).unwrap();
+    assert!(root
+        .join("content/en/x/published")
+        .join(&queued.filename)
+        .is_file());
+    assert_eq!(
+        crate::plan::social_at(&project, Channel::X, "en", &queued.filename),
+        None
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_topic_is_the_first_line_cut_at_a_word() {
+    assert_eq!(topic_of("\n# Hello there\nmore"), "Hello there");
+    let long = "This first line is much longer than a list has room for, so it is cut short";
+    assert_eq!(
+        topic_of(long),
+        "This first line is much longer than a list has room for, so…"
+    );
+    assert_eq!(topic_of("   "), "");
+}
+
+#[test]
+fn addresses_in_a_post_are_found_and_the_text_kept_as_it_is() {
+    let body = "New release!\nRead it at https://mayorana.ch/en/blog/x.\n(see http://a.org/b_(c)) or www.d.org\nxhttps://no https://";
+    let pieces = split_links(body);
+    let links: Vec<&str> = pieces.iter().filter(|(_, l)| *l).map(|(p, _)| *p).collect();
+    assert_eq!(
+        links,
+        ["https://mayorana.ch/en/blog/x", "http://a.org/b_(c)"]
+    );
+    let whole: String = pieces.iter().map(|(p, _)| *p).collect();
+    assert_eq!(whole, body);
+    assert_eq!(split_links("no link here"), [("no link here", false)]);
+    assert_eq!(split_links(""), []);
+}
+
+#[test]
+fn a_written_post_has_its_link_bare_and_on_a_line_of_its_own() {
+    let link = "https://mayorana.ch/en/apps/publishkit";
+    // Put in by the model as asked: left alone.
+    let good = format!("Big news.\n\n{link}\n\n#rust");
+    assert_eq!(place_link(&good, link), good);
+    // Markdown and angle brackets undone.
+    assert_eq!(
+        place_link(&format!("Try [PublishKit]({link}) and <{link}>"), link),
+        format!("Try {link} and {link}")
+    );
+    // Left out: added before the closing hashtags.
+    assert_eq!(
+        place_link("Big news.\n\n#rust #desktop", link),
+        format!("Big news.\n\n{link}\n\n#rust #desktop")
+    );
+    assert_eq!(
+        place_link("Big news.", link),
+        format!("Big news.\n\n{link}")
+    );
+    // No link asked for: nothing changes.
+    assert_eq!(place_link("Big news.\n#rust", ""), "Big news.\n#rust");
+}
+
+#[test]
+fn the_model_is_told_to_keep_the_link_as_it_is_only_when_there_is_one() {
+    let link = "https://mayorana.ch/en/apps/publishkit";
+    let asked = social_prompt(Channel::LinkedIn, "Launch", "fast", link);
+    assert!(asked.contains(&format!("Link: {link}\n")));
+    assert!(asked.contains("no markdown link"));
+    assert!(asked.contains("no URL shortener"));
+    let plain = social_prompt(Channel::LinkedIn, "Launch", "fast", "  ");
+    assert!(!plain.contains("Link:"));
+    assert!(plain.contains("Angle / key points: fast\n\nOutput ONLY"));
 }

@@ -1,10 +1,7 @@
-//! A LinkedIn post's images or video: files beside the post, listed in its front matter
+//! A LinkedIn or X post's images or video: files beside the post, listed in its front matter
 //! (`media: [cover.png]`), moved and deleted with it.
 
 use super::*;
-
-/// What LinkedIn takes in one post: images, up to this many, or one video.
-pub const MAX_IMAGES: usize = 20;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Media {
@@ -13,7 +10,7 @@ pub enum Media {
 }
 
 impl Media {
-    /// By the file's extension; `None` for a file LinkedIn doesn't take.
+    /// By the file's extension; `None` for a file the networks don't take.
     pub fn of(name: &str) -> Option<Media> {
         let extension = Path::new(name).extension()?.to_str()?.to_lowercase();
         match extension.as_str() {
@@ -29,8 +26,8 @@ pub fn media_of(content: &str) -> Vec<String> {
     frontmatter::list(&frontmatter::fields(content), "media")
 }
 
-/// Refused unless it is images (at most [`MAX_IMAGES`]) or one video.
-fn check(names: &[String]) -> Result<()> {
+/// Refused unless it is images (as many as the network takes) or one video.
+fn check(names: &[String], channel: Channel) -> Result<()> {
     let mut kinds = Vec::with_capacity(names.len());
     for name in names {
         match Media::of(name) {
@@ -41,10 +38,17 @@ fn check(names: &[String]) -> Result<()> {
         }
     }
     if kinds.contains(&Media::Video) && kinds.len() > 1 {
-        bail!("a LinkedIn post has images or one video, not both or several videos");
+        bail!(
+            "a post on {} has images or one video, not both or several videos",
+            channel.label()
+        );
     }
-    if kinds.len() > MAX_IMAGES {
-        bail!("a LinkedIn post takes at most {MAX_IMAGES} images");
+    if kinds.len() > channel.max_images() {
+        bail!(
+            "{} takes at most {} images in a post",
+            channel.label(),
+            channel.max_images()
+        );
     }
     Ok(())
 }
@@ -52,7 +56,7 @@ fn check(names: &[String]) -> Result<()> {
 /// Sets a post's media to `sources`, in that order: each a file to copy in beside the post,
 /// under a free name, or the name of one it has already. The ones it had and no longer
 /// lists are deleted; an empty list takes them all off. Gives the names it lists now.
-pub fn set_media(post: &Path, sources: &[PathBuf]) -> Result<Vec<String>> {
+pub fn set_media(post: &Path, channel: Channel, sources: &[PathBuf]) -> Result<Vec<String>> {
     let folder = post.parent().context("a post is in a folder")?;
     let content = std::fs::read_to_string(post).with_context(|| format!("{}", post.display()))?;
     let before = media_of(&content);
@@ -73,7 +77,7 @@ pub fn set_media(post: &Path, sources: &[PathBuf]) -> Result<Vec<String>> {
             })
         })
         .collect();
-    check(&names)?;
+    check(&names, channel)?;
     for source in sources {
         if kept(source).is_none() && !source.is_file() {
             bail!("{} is not a file", source.display());

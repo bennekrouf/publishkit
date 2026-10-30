@@ -117,37 +117,10 @@ pub(super) fn CenterPanel(
                                 match api::generate_post(&t, &s, &l, &provider, &api_key, &pcfg).await {
                                     Ok(body) => match api::save_to_queue(&project, &t, &s, &l, &body, &pcfg) {
                                         Ok(path) => {
-                                            // Generate social media teasers
-                                            if !pcfg.social_enabled {
-                                                *status_msg.write() = format!(
-                                                    "Saved: {}",
-                                                    path.split('/').next_back().unwrap_or("")
-                                                );
-                                                *posts.write() = load_posts(&project);
-                                                *generating.write() = false;
-                                                return;
-                                            }
-                                            *status_msg.write() = "Generating social posts…".to_string();
-                                            let name = std::path::Path::new(&path).file_name()
-                                                .map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                                            let blog_url = pcfg.post_url(&l, &name);
-                                            match api::generate_social_posts(
-                                                &t, &s, &l, &blog_url, &provider, &api_key
-                                            ).await {
-                                                Ok(social) => {
-                                                    let _ = api::save_social(&path, &social);
-                                                    *status_msg.write() = format!(
-                                                        "Saved: {} + social posts",
-                                                        path.split('/').next_back().unwrap_or("")
-                                                    );
-                                                }
-                                                Err(e) => {
-                                                    *status_msg.write() = format!(
-                                                        "Saved: {} (social failed: {e})",
-                                                        path.split('/').next_back().unwrap_or("")
-                                                    );
-                                                }
-                                            }
+                                            *status_msg.write() = format!(
+                                                "Saved: {}",
+                                                path.split(['/', '\\']).next_back().unwrap_or("")
+                                            );
                                             *posts.write() = load_posts(&project);
                                         }
                                         Err(e) => *status_msg.write() = format!("Save error: {e}"),
@@ -159,6 +132,36 @@ pub(super) fn CenterPanel(
                         },
                         if *generating.read() { "Generating…" } else { "Generate & queue" }
                     }
+                    button {
+                        class: "btn-link",
+                        disabled: *generating.read() || title.read().trim().is_empty(),
+                        title: "Save the title and summary as a draft and open it in the editor, to write it yourself",
+                        onclick: move |_| {
+                            let t = title.read().trim().to_string();
+                            let s = summary.read().trim().to_string();
+                            let l = shown_lang(&lang.read(), &posts.read().languages);
+                            let project = config.read().project_path.clone().unwrap_or_default();
+                            let pcfg = ProjectConfig::load(&project);
+                            match api::save_to_queue(&project, &t, &s, &l, "", &pcfg) {
+                                Ok(path) => {
+                                    let all = load_posts(&project);
+                                    let post = all
+                                        .blog(&l)
+                                        .queue
+                                        .into_iter()
+                                        .find(|p| p.path == std::path::Path::new(&path));
+                                    posts.set(all);
+                                    title.set(String::new());
+                                    summary.set(String::new());
+                                    status_msg.set(String::new());
+                                    // Opens in the editor.
+                                    selected.set(post);
+                                }
+                                Err(e) => status_msg.set(format!("Save error: {e}")),
+                            }
+                        },
+                        "or write it yourself"
+                    }
                 }
             } else {
                 crate::editor::PostEditor { config, posts, selected }
@@ -168,7 +171,12 @@ pub(super) fn CenterPanel(
 }
 
 #[component]
-pub(super) fn PreviewPanel(selected: Signal<Option<Post>>, config: Signal<AppConfig>) -> Element {
+pub(super) fn PreviewPanel(
+    selected: Signal<Option<Post>>,
+    config: Signal<AppConfig>,
+    content_mode: Signal<ContentMode>,
+    compose: Signal<Option<Compose>>,
+) -> Element {
     let post = selected.read().clone();
     let mut copied = use_signal(String::new);
     let mut social_status = use_signal(String::new);
@@ -191,10 +199,41 @@ pub(super) fn PreviewPanel(selected: Signal<Option<Post>>, config: Signal<AppCon
                     }
                 }
 
-                // Social posts section
+                // A LinkedIn or X post about it, written on that network's tab.
+                div { class: "share-row",
+                    for channel in Channel::ALL {
+                        button {
+                            class: "btn-copy",
+                            title: "Write a {channel.label()} post about this one, its link in it",
+                            onclick: {
+                                let p = p.clone();
+                                move |_| {
+                                    let project = config.read().project_path.clone().unwrap_or_default();
+                                    let url = ProjectConfig::load(&project).address(&p.lang, &p.filename, &p.full_content);
+                                    // Without the site's address in Settings, there's no link to give.
+                                    let url = if url.starts_with("http") { url } else { String::new() };
+                                    let mut compose = compose;
+                                    let mut content_mode = content_mode;
+                                    compose.set(Some(Compose {
+                                        channel,
+                                        lang: p.lang.clone(),
+                                        topic: p.title.clone(),
+                                        angle: p.description.trim().to_string(),
+                                        link: url.clone(),
+                                        body: format!("{}\n\n{url}", p.title).trim().to_string(),
+                                    }));
+                                    content_mode.set(ContentMode::Social(channel));
+                                }
+                            },
+                            "Share on {channel.label()}…"
+                        }
+                    }
+                }
+
+                // Teasers written with the post before LinkedIn and X posts had tabs of their own.
                 if let Some(social) = &p.social {
                     div { class: "social-section",
-                        h3 { class: "social-heading", "Social Posts" }
+                        h3 { class: "social-heading", "Teasers" }
 
                         div { class: "social-card",
                             div { class: "social-card-header",

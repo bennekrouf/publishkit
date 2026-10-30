@@ -4,9 +4,10 @@
 //! Kept in `.publishkit/plan.json` at the site's root rather than in the posts' front matter, so
 //! no framework's schema meets fields it doesn't know. Entries are keyed `lang/filename`; a draft
 //! keeps its file name until it is published, and publishing or deleting it drops its entry.
-//! LinkedIn drafts have entries of their own: PublishKit can't post to LinkedIn, so their date is
-//! a reminder on the calendar, never something done on their own.
+//! LinkedIn and X drafts have entries of their own: PublishKit doesn't post to those networks, so
+//! their date is a reminder on the calendar, never something done on their own.
 
+use crate::state::Channel;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -64,6 +65,9 @@ pub struct Plan {
     /// LinkedIn drafts, keyed the same way. Only `publish_at` is used: they have no board.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub linkedin: BTreeMap<String, Entry>,
+    /// X drafts, as LinkedIn's.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub x: BTreeMap<String, Entry>,
 }
 
 fn path(project_path: &str) -> PathBuf {
@@ -151,8 +155,8 @@ impl When {
         self.time.map(|t| t.format("%H:%M").to_string())
     }
 
-    /// As a LinkedIn post's `date` keeps it: `2026-10-16T09:00`, or the plain day.
-    pub fn linkedin_date(&self) -> String {
+    /// As a LinkedIn or X post's `date` keeps it: `2026-10-16T09:00`, or the plain day.
+    pub fn social_date(&self) -> String {
         match self.time {
             Some(t) => format_when(self.day.and_time(t)),
             None => self.day.format("%Y-%m-%d").to_string(),
@@ -185,13 +189,35 @@ impl Plan {
 
     pub fn save(&self, project_path: &str) -> std::io::Result<()> {
         let path = path(project_path);
-        if self.drafts.is_empty() && self.linkedin.is_empty() && !path.exists() {
+        if self.drafts.is_empty() && self.linkedin.is_empty() && self.x.is_empty() && !path.exists()
+        {
             return Ok(());
         }
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
         std::fs::write(path, serde_json::to_string_pretty(self).unwrap_or_default())
+    }
+
+    fn social(&self, channel: Channel) -> &BTreeMap<String, Entry> {
+        match channel {
+            Channel::LinkedIn => &self.linkedin,
+            Channel::X => &self.x,
+        }
+    }
+
+    fn social_mut(&mut self, channel: Channel) -> &mut BTreeMap<String, Entry> {
+        match channel {
+            Channel::LinkedIn => &mut self.linkedin,
+            Channel::X => &mut self.x,
+        }
+    }
+
+    /// When a LinkedIn or X draft is planned to go out: `2026-11-02T09:00`.
+    pub fn social_at(&self, channel: Channel, lang: &str, filename: &str) -> Option<String> {
+        self.social(channel)
+            .get(&key(lang, filename))
+            .and_then(|e| e.publish_at.clone())
     }
 
     pub fn get(&self, lang: &str, filename: &str) -> Entry {
@@ -244,17 +270,20 @@ pub fn update(
     plan.save(project_path)
 }
 
-/// When a LinkedIn draft is planned to go out: `2026-11-02T09:00`.
-pub fn linkedin_at(project_path: &str, lang: &str, filename: &str) -> Option<String> {
-    Plan::load(project_path)
-        .linkedin
-        .get(&key(lang, filename))
-        .and_then(|e| e.publish_at.clone())
+/// When a LinkedIn or X draft is planned to go out: `2026-11-02T09:00`.
+pub fn social_at(
+    project_path: &str,
+    channel: Channel,
+    lang: &str,
+    filename: &str,
+) -> Option<String> {
+    Plan::load(project_path).social_at(channel, lang, filename)
 }
 
-/// Plans a LinkedIn draft for `when`, or drops its date with `None`.
-pub fn plan_linkedin(
+/// Plans a LinkedIn or X draft for `when`, or drops its date with `None`.
+pub fn plan_social(
     project_path: &str,
+    channel: Channel,
     lang: &str,
     filename: &str,
     when: Option<String>,
@@ -262,7 +291,7 @@ pub fn plan_linkedin(
     let mut plan = Plan::load(project_path);
     match when {
         Some(at) => {
-            plan.linkedin.insert(
+            plan.social_mut(channel).insert(
                 key(lang, filename),
                 Entry {
                     publish_at: Some(at),
@@ -271,16 +300,20 @@ pub fn plan_linkedin(
             );
         }
         None => {
-            plan.linkedin.remove(&key(lang, filename));
+            plan.social_mut(channel).remove(&key(lang, filename));
         }
     }
     plan.save(project_path)
 }
 
-/// Drops a LinkedIn draft from the site's plan, if it is there.
-pub fn forget_linkedin(project_path: &str, lang: &str, filename: &str) {
+/// Drops a LinkedIn or X draft from the site's plan, if it is there.
+pub fn forget_social(project_path: &str, channel: Channel, lang: &str, filename: &str) {
     let mut plan = Plan::load(project_path);
-    if plan.linkedin.remove(&key(lang, filename)).is_some() {
+    if plan
+        .social_mut(channel)
+        .remove(&key(lang, filename))
+        .is_some()
+    {
         let _ = plan.save(project_path);
     }
 }
@@ -356,10 +389,10 @@ mod tests {
     #[test]
     fn a_date_is_written_the_way_each_kind_of_post_keeps_it() {
         let w = When::parse("2026-10-16T09:00").unwrap();
-        assert_eq!(w.linkedin_date(), "2026-10-16T09:00");
+        assert_eq!(w.social_date(), "2026-10-16T09:00");
         assert!(w.blog_date("").starts_with("2026-10-16T09:00:00"));
         let day = When::parse("2026-10-16").unwrap();
-        assert_eq!(day.linkedin_date(), "2026-10-16");
+        assert_eq!(day.social_date(), "2026-10-16");
         assert_eq!(day.blog_date("2026-01-01"), "2026-10-16");
         assert!(day
             .blog_date("2026-01-01T08:00:00Z")

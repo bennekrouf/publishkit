@@ -15,9 +15,65 @@ pub struct SocialPosts {
     pub twitter: String,
 }
 
-/// A standalone LinkedIn post about a product/feature (not tied to a blog article).
+/// A network PublishKit keeps short posts for: written here, posted there by hand, then
+/// recorded here as posted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Channel {
+    LinkedIn,
+    X,
+}
+
+impl Channel {
+    pub const ALL: [Channel; 2] = [Channel::LinkedIn, Channel::X];
+
+    /// As the MCP tools' `kind` names it, and as its folder is named.
+    pub fn key(self) -> &'static str {
+        match self {
+            Channel::LinkedIn => "linkedin",
+            Channel::X => "x",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Channel> {
+        Channel::ALL.into_iter().find(|c| c.key() == key)
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Channel::LinkedIn => "LinkedIn",
+            Channel::X => "X",
+        }
+    }
+
+    /// Its mark in lists and on the calendar.
+    pub fn badge(self) -> &'static str {
+        match self {
+            Channel::LinkedIn => "in",
+            Channel::X => "𝕏",
+        }
+    }
+
+    /// The longest post the network takes, in characters (X Premium takes longer ones).
+    pub fn limit(self) -> usize {
+        match self {
+            Channel::LinkedIn => 3000,
+            Channel::X => 280,
+        }
+    }
+
+    /// Images one post takes; or one video.
+    pub fn max_images(self) -> usize {
+        match self {
+            Channel::LinkedIn => 20,
+            Channel::X => 4,
+        }
+    }
+}
+
+/// A standalone post for LinkedIn or X, about a product, a feature, or a blog post.
 #[derive(Clone, Debug, PartialEq)]
-pub struct LinkedInPost {
+pub struct SocialPost {
+    pub channel: Channel,
     pub path: PathBuf,
     pub filename: String,
     pub topic: String,
@@ -33,7 +89,7 @@ pub struct LinkedInPost {
     pub media: Vec<String>,
 }
 
-impl LinkedInPost {
+impl SocialPost {
     /// Where one of its media files is.
     pub fn media_path(&self, name: &str) -> PathBuf {
         self.path.with_file_name(name)
@@ -91,7 +147,8 @@ pub struct ProjectPosts {
     /// Every language of the site, even one with no post yet.
     pub languages: Vec<String>,
     pub blog: BTreeMap<String, Shelf<Post>>,
-    pub linkedin: BTreeMap<String, Shelf<LinkedInPost>>,
+    /// By network, then language.
+    pub social: BTreeMap<Channel, BTreeMap<String, Shelf<SocialPost>>>,
 }
 
 impl ProjectPosts {
@@ -99,7 +156,7 @@ impl ProjectPosts {
         Self {
             languages: vec![],
             blog: BTreeMap::new(),
-            linkedin: BTreeMap::new(),
+            social: BTreeMap::new(),
         }
     }
 
@@ -107,8 +164,12 @@ impl ProjectPosts {
         self.blog.get(lang).cloned().unwrap_or_default()
     }
 
-    pub fn linkedin(&self, lang: &str) -> Shelf<LinkedInPost> {
-        self.linkedin.get(lang).cloned().unwrap_or_default()
+    pub fn social(&self, channel: Channel, lang: &str) -> Shelf<SocialPost> {
+        self.social
+            .get(&channel)
+            .and_then(|c| c.get(lang))
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -216,6 +277,9 @@ pub struct AppConfig {
     /// The post list's width, as last dragged; `None`: the default.
     #[serde(default)]
     pub left_panel_width: Option<f64>,
+    /// The tab open last (`blog`, `linkedin`, `x`, `board`, `calendar`), opened again at start.
+    #[serde(default)]
+    pub last_tab: Option<String>,
 }
 
 /// Sites the switcher remembers.
@@ -420,7 +484,8 @@ pub struct ProjectConfig {
     /// A post's address, for its social teasers: `{site_url}`, `{lang}`, `{slug}`, `{year}`,
     /// `{month}` and `{day}` are filled in.
     pub post_url: String,
-    /// Where LinkedIn posts are kept, per language; empty: `content/{lang}/linkedin`.
+    /// Where LinkedIn posts are kept, per language; empty: `content/{lang}/linkedin`. X posts
+    /// are kept beside them, in `x`.
     pub linkedin_dir: String,
     /// Puts the site online, run in its folder from the Deploy button: `git push`, `npm run
     /// deploy`, `vercel --prod`… Empty: no Deploy.

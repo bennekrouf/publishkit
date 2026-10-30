@@ -15,6 +15,41 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- An **X** tab, next to LinkedIn: X posts have a queue and a posted list of
+  their own, **Mark as posted…**, images (up to 4) or a video, and a place on
+  the Calendar with an 𝕏 badge. With a Bluesky or Mastodon account set up, an
+  X post can go there too, as it is.
+- **Share on LinkedIn…** and **Share on X…** on a blog post open that tab's
+  form with the post's title and link filled in, to write about it there.
+- **or write it yourself** under the blog's new-post form saves the title and
+  summary as a draft and opens it in the editor, with no model involved.
+- A LinkedIn or X post can be changed after saving: **Edit** in its preview.
+- Claude can save X posts too, and is told that you usually write LinkedIn
+  and X posts yourself, so it keeps your text as you gave it.
+- Links in a LinkedIn or X post's preview are clickable and open in your
+  browser. What you copy is still exactly the text of the post.
+- **✨ Draft with AI** takes an optional link. It goes into the post as it is,
+  on a line of its own, the way LinkedIn and X make it clickable, with no
+  markdown and no shortened address. **Share on LinkedIn…** and **Share on
+  X…** fill it with the blog post's address. Claude can pass a link too.
+- A LinkedIn post with both a link and images or a video says that LinkedIn
+  won't show a link preview card for it, though the link still works.
+
+### Changed
+
+- Blog, LinkedIn and X are now independent: start with whichever you like.
+  A new blog post no longer writes LinkedIn and X teasers on its own; share
+  it from its preview when you want to. Teasers older posts have are still
+  shown.
+- LinkedIn and X posts start from a text box you write in, with a character
+  count. **✨ Draft with AI** is there when you want the model to write a
+  first version, which lands in the same box for you to change before saving.
+- PublishKit opens on the tab you used last, not always on Blog.
+
 ## [0.1.35] - 2026-10-29
 
 ### Changed
