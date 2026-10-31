@@ -399,6 +399,8 @@ fn MainLayout(
 ) -> Element {
     let mut show_mcp = use_signal(|| false);
     let mut show_repurpose = use_signal(|| false);
+    // A recording PolishCast sent: Repurpose opens with it.
+    let mut handoff = use_signal(|| None::<crate::repurpose::Handoff>);
     let compose = use_signal(|| None::<Compose>);
     let pro = use_context::<desktop_kit::ui::Pro>();
     let active_lang = use_signal(String::new);
@@ -474,6 +476,16 @@ fn MainLayout(
             })
             .await
             .unwrap_or_default();
+            if !*show_repurpose.peek() {
+                if let Some(sent) = tokio::task::spawn_blocking(crate::repurpose::take_handoff)
+                    .await
+                    .ok()
+                    .flatten()
+                {
+                    handoff.set(Some(sent));
+                    show_repurpose.set(true);
+                }
+            }
             if last.as_ref().is_some_and(|l| *l != stamp) {
                 let mut posts = posts;
                 posts.set(load_posts(&project));
@@ -491,7 +503,10 @@ fn MainLayout(
                     button {
                         class: "kit-btn",
                         title: "Turn a finished video or audio recording into clips, slides, posts and a blog draft",
-                        onclick: move |_| show_repurpose.set(true),
+                        onclick: move |_| {
+                            handoff.set(None);
+                            show_repurpose.set(true);
+                        },
                         "Repurpose"
                     }
                     button {
@@ -617,7 +632,7 @@ fn MainLayout(
                 crate::mcp::McpModal { show: show_mcp }
             }
             if show_repurpose() {
-                crate::repurpose::RepurposeModal { show: show_repurpose, config, posts, notice }
+                crate::repurpose::RepurposeModal { show: show_repurpose, config, posts, notice, handoff: handoff() }
             }
         }
     }

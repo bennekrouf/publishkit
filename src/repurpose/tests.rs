@@ -246,3 +246,26 @@ fn the_plan_is_queued_as_drafts_that_say_where_they_came_from() {
     assert_eq!(blog.stage, Stage::Idea);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn a_recording_sent_by_polishcast_is_picked_up_while_fresh() {
+    use super::window::handoff_from;
+    let at = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+    let note =
+        r#"{"media": "/m/talk.mp4", "transcript": "/m/talk.srt", "title": "Demo", "at": 999000}"#;
+    assert_eq!(
+        handoff_from(note, at),
+        Some(Handoff {
+            media: "/m/talk.mp4".into(),
+            transcript: Some("/m/talk.srt".into()),
+            title: "Demo".into()
+        })
+    );
+    // Left for over an hour, or not a recording: ignored.
+    let later = at + std::time::Duration::from_secs(3 * 3600);
+    assert_eq!(handoff_from(note, later), None);
+    assert_eq!(
+        handoff_from(r#"{"media": "/m/notes.txt", "at": 999000}"#, at),
+        None
+    );
+}
