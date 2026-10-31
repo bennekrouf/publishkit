@@ -16,6 +16,8 @@ pub(super) fn list_posts(args: &Value) -> Result<Value, String> {
         "published" => (false, true),
         other => return Err(format!("where is queue, published or all, not {other}")),
     };
+    let limit = args["limit"].as_u64().map_or(10, |n| n as usize);
+    let offset = args["offset"].as_u64().map_or(0, |n| n as usize);
     let mut out = serde_json::Map::new();
     for lang in langs {
         let mut v = serde_json::Map::new();
@@ -26,10 +28,30 @@ pub(super) fn list_posts(args: &Value) -> Result<Value, String> {
             );
         }
         if done {
-            v.insert(
-                "published".into(),
-                Value::Array(posts_in(&project, &lang, kind, true)),
-            );
+            // Newest first, a page at a time and without descriptions: a site's
+            // whole archive in every language would fill a client's context.
+            let all = posts_in(&project, &lang, kind, true);
+            let page: Vec<Value> = all
+                .iter()
+                .skip(offset)
+                .take(limit)
+                .map(|p| {
+                    let mut p = p.clone();
+                    if let Some(o) = p.as_object_mut() {
+                        o.remove("description");
+                    }
+                    p
+                })
+                .collect();
+            let older = all.len().saturating_sub(offset + page.len());
+            v.insert("published".into(), Value::Array(page));
+            v.insert("published_total".into(), json!(all.len()));
+            if older > 0 {
+                v.insert(
+                    "published_older".into(),
+                    json!(format!("{older} more; pass offset {}", offset + limit)),
+                );
+            }
         }
         out.insert(lang, Value::Object(v));
     }
