@@ -25,7 +25,8 @@ pub(super) fn tools() -> Value {
         },
         {
             "name": "list_posts",
-            "description": "Posts with their title (or a LinkedIn or X post's topic), description, date, status and length.",
+            "description": "Posts with their title (or a LinkedIn or X post's topic), date, status and length: every \
+                            draft with its description, and the newest published posts a page at a time.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -33,6 +34,8 @@ pub(super) fn tools() -> Value {
                     "lang": { "type": "string", "description": "One language; default all." },
                     "kind": kind,
                     "where": { "type": "string", "enum": ["queue", "published", "all"], "description": "Default all." },
+                    "limit": { "type": "integer", "description": "Published posts per language; default 10." },
+                    "offset": { "type": "integer", "description": "Published posts to skip, newest first; default 0." },
                 },
             },
         },

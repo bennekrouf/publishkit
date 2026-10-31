@@ -15,6 +15,18 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- PublishKit's answers to Claude and other agents are shorter, so a long
+  session spends fewer tokens: empty fields are left out and nothing is
+  padded with spacing.
+- Listing posts now gives every draft but only the 10 newest published
+  posts per language, without their descriptions, and says how many
+  older ones there are. A site with a long archive no longer fills an
+  agent's whole conversation with one listing.
+
 ## [0.1.39] - 2026-10-31
 
 ### Changed
