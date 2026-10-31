@@ -8,12 +8,12 @@ pub use files::*;
 mod media;
 pub use media::*;
 
-fn write_in(lang: &str) -> String {
+pub(crate) fn write_in(lang: &str) -> String {
     format!("Write entirely in {}.", language_name(lang))
 }
 
-/// A LinkedIn or X post written by the model, from what it is about and the points to make;
-/// `link`, when there is one, ends up as it is, on a line of its own.
+/// A network's post written by the model, from what it is about and the points to make;
+/// `link`, when there is one, ends up as it is, on a line of its own, where it can be clicked.
 #[allow(clippy::too_many_arguments)]
 pub async fn generate_social_post(
     channel: Channel,
@@ -43,18 +43,41 @@ pub async fn generate_social_post(
             idea, no corporate fluff. At most 2 hashtags. At most 270 characters in all, any \
             link included."
         ),
+        Channel::Instagram => format!(
+            "You write Instagram captions for {company}. {lang_instruction} The caption goes \
+            under a photo or a video: open with a line that makes people stop scrolling, then a \
+            few short lines, warm and concrete, no corporate fluff. A few emoji at most. End with \
+            at most 5 relevant hashtags on a line of their own: Instagram takes no more. At most \
+            2,000 characters."
+        ),
+        Channel::TikTok => format!(
+            "You write TikTok captions for {company}. {lang_instruction} The caption goes under a \
+            video: short, casual and direct, a hook in the first line, one idea. End with 3 to 5 \
+            relevant hashtags. At most 300 characters."
+        ),
     };
     let user = social_prompt(channel, topic, angle, link);
     let text = call(provider, &system, &user, api_key).await?;
-    Ok(place_link(text.trim(), link.trim()))
+    if channel.links_clickable() {
+        Ok(place_link(text.trim(), link.trim()))
+    } else {
+        Ok(text.trim().to_string())
+    }
 }
 
-/// What the model is asked for a LinkedIn or X post.
+/// What the model is asked for a network's post.
 fn social_prompt(channel: Channel, topic: &str, angle: &str, link: &str) -> String {
     let link = link.trim();
     // LinkedIn and X make a bare address clickable, and show no anchor text or markdown.
+    // Instagram and TikTok show it as plain text: people are sent to the profile instead.
     let link_rule = if link.is_empty() {
         String::new()
+    } else if !channel.links_clickable() {
+        format!(
+            "The post is about this page: {link}\n\
+            Do not put the address in the caption, where it can't be clicked: say the link is \
+            in the bio instead.\n"
+        )
     } else {
         format!(
             "Link: {link}\n\
@@ -198,20 +221,39 @@ pub fn save_social_to_queue(
     lang: &str,
     body: &str,
 ) -> Result<String> {
+    save_social_with(
+        project_path,
+        project_config,
+        channel,
+        topic,
+        lang,
+        body,
+        &[],
+    )
+}
+
+/// A network's draft with more front matter after its own: where a repurposed one came from.
+pub fn save_social_with(
+    project_path: &str,
+    project_config: &ProjectConfig,
+    channel: Channel,
+    topic: &str,
+    lang: &str,
+    body: &str,
+    extra: &[(&str, Field)],
+) -> Result<String> {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let (queue_dir, _) = project_config.resolve_social_paths(project_path, channel, lang);
     std::fs::create_dir_all(&queue_dir)?;
 
-    let content = frontmatter::build(
-        Format::Yaml,
-        &[
-            ("topic", Field::Text(topic.to_string())),
-            ("date", Field::Text(today)),
-            ("lang", Field::Text(lang.to_string())),
-            ("status", Field::Text("draft".into())),
-        ],
-        body,
-    );
+    let mut fields = vec![
+        ("topic", Field::Text(topic.to_string())),
+        ("date", Field::Text(today)),
+        ("lang", Field::Text(lang.to_string())),
+        ("status", Field::Text("draft".into())),
+    ];
+    fields.extend(extra.iter().cloned());
+    let content = frontmatter::build(Format::Yaml, &fields, body);
     let slug = Some(slugify(topic))
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "post".into());
@@ -228,7 +270,7 @@ pub fn set_body(path: &Path, body: &str) -> Result<()> {
     Ok(())
 }
 
-/// Moves a LinkedIn or X draft to the posted ones, dated `at` when it went out earlier (posted
+/// Moves a network's draft to the posted ones, dated `at` when it went out earlier (posted
 /// on the network first, saved here after), else today.
 pub fn publish_social_post(
     project_path: &str,
@@ -316,7 +358,12 @@ pub async fn generate_post(
 }
 
 /// api0's OpenAI-compatible chat endpoint, in the region set in Settings.
-async fn call(provider: &LlmProvider, system: &str, user: &str, api_key: &str) -> Result<String> {
+pub(crate) async fn call(
+    provider: &LlmProvider,
+    system: &str,
+    user: &str,
+    api_key: &str,
+) -> Result<String> {
     let name = provider.label();
     let client = reqwest::Client::new();
     let body = serde_json::json!({

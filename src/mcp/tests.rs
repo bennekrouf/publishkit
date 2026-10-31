@@ -86,3 +86,22 @@ fn the_codex_command_quotes_a_path_with_spaces() {
         "codex mcp add publishkit -- \"/A B/publishkit\" mcp"
     );
 }
+
+#[test]
+fn every_network_has_a_queue_tool_and_a_kind() {
+    let tools = tools();
+    let tools = tools.as_array().unwrap();
+    for channel in Channel::ALL {
+        let name = format!("queue_{}", channel.key());
+        assert!(tools.iter().any(|t| t["name"] == name.as_str()), "{name}");
+        let get_post = tools.iter().find(|t| t["name"] == "get_post").unwrap();
+        let kinds = get_post["inputSchema"]["properties"]["kind"]["enum"]
+            .as_array()
+            .unwrap();
+        assert!(
+            kinds.iter().any(|k| k == channel.key()),
+            "{}",
+            channel.key()
+        );
+    }
+}

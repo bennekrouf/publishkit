@@ -15,6 +15,47 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- Instagram and TikTok tabs, beside LinkedIn and X. Write a caption, attach
+  its photos or video, and the preview shows them first, cropped the way each
+  feed shows them (4:5 on Instagram, 9:16 on TikTok). An Instagram carousel
+  can mix photos and videos. PublishKit tells you when a post has no media
+  yet, when a link in a caption won't be clickable, and when an Instagram
+  caption has more than 5 hashtags, Instagram's limit since the end of 2025.
+  As with LinkedIn and X, you post it yourself and mark it as posted.
+- A post's preview says when an image isn't the size or shape its network
+  recommends: a tall photo Instagram will crop, a landscape one on TikTok, a
+  small one that will look soft. Only a note: nothing stops you posting it.
+- No website? "Just social posts" on the first screen keeps your LinkedIn,
+  X, Instagram and TikTok posts in a folder of their own (Documents/PublishKit,
+  or one you pick), with no Blog or Board tab and none of a website's
+  settings.
+- Settings → Tabs: turn the blog on or off for a folder, and hide the
+  networks you don't post on. Their posts stay in the folder.
+- Claude can now queue Instagram and TikTok posts too, and knows when a
+  folder holds social posts only.
+- Repurpose, in the top bar: pick a finished PolishCast video or TrackCut
+  recording and its transcript, and PublishKit writes 3 to 8 short clips as
+  TikTok drafts, each saying where to cut it and what to put on screen, an
+  Instagram carousel with its slides, a LinkedIn and an X post, and a blog
+  draft or outline in your site's voice. Subtitles (.srt or .vtt) give each
+  clip its start and end; a transcript beside the recording by the same name
+  is picked up by itself. Every text fits its network's length and hashtag
+  limits, and everything waits as a draft for you to edit or delete. A
+  repurposed draft shows the recording it came from, the clip's times and
+  the carousel's slides, ready to copy. Claude can repurpose a recording
+  too.
+
+### Changed
+
+- When you use PublishKit from Claude, Codex or another agent, the agent now
+  reads the PublishKit skill first if you have it installed, so it follows the
+  skill's rules on what needs your yes and lays out its answers the way the
+  skill describes.
+
 ## [0.1.40] - 2026-10-31
 
 ### Changed

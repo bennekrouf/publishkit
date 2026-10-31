@@ -15,6 +15,45 @@ impl ProjectConfig {
         }
     }
 
+    /// A folder for social posts only: no blog, each network's posts in a folder of its own,
+    /// `linkedin/en/queue`. Written in `project_path` unless it has settings already, which
+    /// are kept as they are.
+    pub fn start_social_only(project_path: &str) -> std::io::Result<()> {
+        std::fs::create_dir_all(project_path)?;
+        if config_path(project_path).exists() {
+            return Ok(());
+        }
+        let lang = "en".to_string();
+        let config = Self {
+            // Set, so that opening it never runs detection, which would put the posts back
+            // under `content/`.
+            preset: Some(Preset::PublishKit),
+            content_paths: Some(ContentPaths {
+                langs: BTreeMap::from([(
+                    lang.clone(),
+                    LangPaths {
+                        queue: format!("content/{lang}/queue"),
+                        blog: format!("content/{lang}/blog"),
+                        suffix: String::new(),
+                    },
+                )]),
+            }),
+            linkedin_dir: "linkedin".into(),
+            blog: false,
+            ..Self::neutral(project_path)
+        };
+        let yaml = serde_yaml::to_string(&config).map_err(std::io::Error::other)?;
+        std::fs::write(config_path(project_path), yaml)
+    }
+
+    /// The networks whose tabs show, in the tab bar's order.
+    pub fn networks(&self) -> Vec<Channel> {
+        Channel::ALL
+            .into_iter()
+            .filter(|c| !self.hidden_networks.iter().any(|h| h == c.key()))
+            .collect()
+    }
+
     pub fn load(project_path: &str) -> Self {
         let path = config_path(project_path);
         let file = std::fs::read_to_string(&path).ok();

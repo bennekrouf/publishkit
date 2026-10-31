@@ -68,6 +68,8 @@ pub(super) fn SettingsModal(
     let mut images_dir = use_signal(|| site.images(&project).0);
     let mut images_url = use_signal(|| site.images(&project).1);
     let mut lang_code = use_signal(|| languages.first().cloned().unwrap_or_default());
+    let mut blog_on = use_signal(|| site.blog);
+    let mut hidden = use_signal(|| site.hidden_networks.clone());
     let single_lang = languages.len() == 1;
     let old_lang = languages.first().cloned().unwrap_or_default();
 
@@ -123,55 +125,97 @@ pub(super) fn SettingsModal(
                     }
                 }
 
-                h3 { class: "settings-section", "This site" }
+                h3 { class: "settings-section", if blog_on() { "This site" } else { "This folder" } }
 
                 div { class: "settings-field",
-                    label { "Built with" }
-                    select {
-                        onchange: {
-                            let project = project.clone();
-                            move |e: Event<FormData>| {
-                                let key = e.value();
-                                if let Some(preset) = Preset::from_key(&key) {
-                                    let mut preview = ProjectConfig::load(&project);
-                                    preview.apply_preset(preset, &project, false);
-                                    publish_cmd.set(preview.publish_command.clone());
-                                    post_url.set(preview.post_url.clone());
-                                    layout.set(layout_hint(&preview));
-                                    if preview.images_dir.is_empty() {
-                                        let (dir, url) = preview.images(&project);
-                                        images_dir.set(dir);
-                                        images_url.set(url);
-                                    }
-                                }
-                                preset_key.set(key);
+                    label { "Tabs" }
+                    div { class: "settings-checks",
+                        label { class: "settings-check",
+                            input {
+                                r#type: "checkbox",
+                                checked: blog_on(),
+                                onchange: move |e| blog_on.set(e.checked()),
                             }
-                        },
-                        if preset_key.read().is_empty() {
-                            option { value: "", selected: true, "Not recognised yet" }
+                            "Blog"
                         }
-                        for preset in Preset::ALL {
-                            option { value: preset.key(), selected: preset_key() == preset.key(), "{preset.label()}" }
+                        for channel in Channel::ALL {
+                            label { class: "settings-check", key: "{channel.key()}",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: !hidden.read().iter().any(|h| h == channel.key()),
+                                    onchange: move |e| {
+                                        let key = channel.key().to_string();
+                                        let mut hidden = hidden.write();
+                                        hidden.retain(|h| *h != key);
+                                        if !e.checked() {
+                                            hidden.push(key);
+                                        }
+                                    },
+                                }
+                                "{channel.label()}"
+                            }
                         }
                     }
-                    p { class: "settings-hint", "{layout}" }
+                    p { class: "settings-hint",
+                        "Blog shows the Blog and Board tabs; leave it off for a folder of social posts only. \
+                         Untick a network you don't post on to hide its tab: its posts stay in the folder."
+                    }
+                }
+
+                if blog_on() {
+                    div { class: "settings-field",
+                        label { "Built with" }
+                        select {
+                            onchange: {
+                                let project = project.clone();
+                                move |e: Event<FormData>| {
+                                    let key = e.value();
+                                    if let Some(preset) = Preset::from_key(&key) {
+                                        let mut preview = ProjectConfig::load(&project);
+                                        preview.apply_preset(preset, &project, false);
+                                        publish_cmd.set(preview.publish_command.clone());
+                                        post_url.set(preview.post_url.clone());
+                                        layout.set(layout_hint(&preview));
+                                        if preview.images_dir.is_empty() {
+                                            let (dir, url) = preview.images(&project);
+                                            images_dir.set(dir);
+                                            images_url.set(url);
+                                        }
+                                    }
+                                    preset_key.set(key);
+                                }
+                            },
+                            if preset_key.read().is_empty() {
+                                option { value: "", selected: true, "Not recognised yet" }
+                            }
+                            for preset in Preset::ALL {
+                                option { value: preset.key(), selected: preset_key() == preset.key(), "{preset.label()}" }
+                            }
+                        }
+                        p { class: "settings-hint", "{layout}" }
+                    }
                 }
 
                 div { class: "settings-field",
-                    label { "Site name" }
+                    label { if blog_on() { "Site name" } else { "Name" } }
                     input { value: "{site_name}", oninput: move |e| site_name.set(e.value()) }
+                    if !blog_on() {
+                        p { class: "settings-hint", "Yours or your brand's: the model writes the posts for it." }
+                    }
                 }
-                div { class: "settings-field",
-                    label { "Site address" }
-                    input { placeholder: "https://example.com", value: "{site_url}", oninput: move |e| site_url.set(e.value()) }
-                }
-                div { class: "settings-field",
-                    label { "A post's address" }
-                    input { value: "{post_url}", oninput: move |e| post_url.set(e.value()) }
-                    p { class: "settings-hint",
-                        "Used in the social teasers, and as the original's address on cross-posted copies. "
-                        code { "{{site_url}}" } " " code { "{{lang}}" } " " code { "{{slug}}" } " "
-                        code { "{{year}}" } " " code { "{{month}}" } " " code { "{{day}}" } " are filled in."
+                if blog_on() {
+                    div { class: "settings-field",
+                        label { "Site address" }
+                        input { placeholder: "https://example.com", value: "{site_url}", oninput: move |e| site_url.set(e.value()) }
+                    }
+                    div { class: "settings-field",
+                        label { "A post's address" }
+                        input { value: "{post_url}", oninput: move |e| post_url.set(e.value()) }
+                        p { class: "settings-hint",
+                            "Used in the social teasers, and as the original's address on cross-posted copies. "
+                            code { "{{site_url}}" } " " code { "{{lang}}" } " " code { "{{slug}}" } " "
+                            code { "{{year}}" } " " code { "{{month}}" } " " code { "{{day}}" } " are filled in."
+                        }
                     }
                 }
                 if single_lang {
@@ -181,106 +225,120 @@ pub(super) fn SettingsModal(
                         p { class: "settings-hint", "The code of the language posts are written in, such as en, fr or de." }
                     }
                 }
-                div { class: "settings-field",
-                    label { "Author" }
-                    input { value: "{author}", oninput: move |e| author.set(e.value()) }
-                }
-                div { class: "settings-field",
-                    label { "Default tags" }
-                    input { placeholder: "comma, separated", value: "{tags}", oninput: move |e| tags.set(e.value()) }
+                if blog_on() {
+                    div { class: "settings-field",
+                        label { "Author" }
+                        input { value: "{author}", oninput: move |e| author.set(e.value()) }
+                    }
+                    div { class: "settings-field",
+                        label { "Default tags" }
+                        input { placeholder: "comma, separated", value: "{tags}", oninput: move |e| tags.set(e.value()) }
+                    }
                 }
                 div { class: "settings-field",
                     label { "Writing brief" }
                     textarea { rows: "5", value: "{brief}", oninput: move |e| brief.set(e.value()) }
-                    p { class: "settings-hint", "What the model is told about your site, its readers and its tone." }
-                }
-                div { class: "settings-field",
-                    label { "Images" }
-                    div { class: "meta-row",
-                        div { class: "field meta-tags",
-                            input { placeholder: "public/images", value: "{images_dir}", oninput: move |e| images_dir.set(e.value()) }
-                        }
-                        div { class: "field meta-tags",
-                            input { placeholder: "/images", value: "{images_url}", oninput: move |e| images_url.set(e.value()) }
-                        }
+                    p { class: "settings-hint",
+                        if blog_on() { "What the model is told about your site, its readers and its tone." }
+                        else { "What the model is told about you, your audience and your tone." }
                     }
-                    p { class: "settings-hint", "The folder images added to a post are copied into, and the address the site serves it at." }
                 }
-                div { class: "settings-field",
-                    label { "After publishing, run" }
-                    input { placeholder: "e.g. npm run build", value: "{publish_cmd}", oninput: move |e| publish_cmd.set(e.value()) }
-                    p { class: "settings-hint", "A command run in the site's folder each time a post is published. Leave empty for none." }
-                }
-                div { class: "settings-field",
-                    label { "Deploy" }
-                    input {
-                        placeholder: "e.g. git add -A && git commit -m \"New post\" && git push",
-                        value: "{deploy_cmd}",
-                        oninput: move |e| deploy_cmd.set(e.value()),
+                if blog_on() {
+                    div { class: "settings-field",
+                        label { "Images" }
+                        div { class: "meta-row",
+                            div { class: "field meta-tags",
+                                input { placeholder: "public/images", value: "{images_dir}", oninput: move |e| images_dir.set(e.value()) }
+                            }
+                            div { class: "field meta-tags",
+                                input { placeholder: "/images", value: "{images_url}", oninput: move |e| images_url.set(e.value()) }
+                            }
+                        }
+                        p { class: "settings-hint", "The folder images added to a post are copied into, and the address the site serves it at." }
                     }
-                    label { class: "settings-check",
+                    div { class: "settings-field",
+                        label { "After publishing, run" }
+                        input { placeholder: "e.g. npm run build", value: "{publish_cmd}", oninput: move |e| publish_cmd.set(e.value()) }
+                        p { class: "settings-hint", "A command run in the site's folder each time a post is published. Leave empty for none." }
+                    }
+                    div { class: "settings-field",
+                        label { "Deploy" }
                         input {
-                            r#type: "checkbox",
-                            checked: deploy_after(),
-                            onchange: move |e| deploy_after.set(e.checked()),
+                            placeholder: "e.g. git add -A && git commit -m \"New post\" && git push",
+                            value: "{deploy_cmd}",
+                            oninput: move |e| deploy_cmd.set(e.value()),
                         }
-                        "Deploy after each publish, scheduled ones included"
+                        label { class: "settings-check",
+                            input {
+                                r#type: "checkbox",
+                                checked: deploy_after(),
+                                onchange: move |e| deploy_after.set(e.checked()),
+                            }
+                            "Deploy after each publish, scheduled ones included"
+                        }
+                        p { class: "settings-hint", "What puts the site online, run in its folder by the Deploy button: npm run deploy, vercel --prod, a git push to a host that builds on push…" }
                     }
-                    p { class: "settings-hint", "What puts the site online, run in its folder by the Deploy button: npm run deploy, vercel --prod, a git push to a host that builds on push…" }
                 }
 
                 h3 { class: "settings-section", "Cross-posting" }
-                p { class: "settings-hint",
-                    "Send a published post to these platforms from its editor, with your site's address as \
-                     canonical so search engines credit the original. The keys stay on this computer."
-                }
-                div { class: "settings-field",
-                    label { "dev.to API key" }
-                    input { r#type: "password", placeholder: "dev.to → Settings → Extensions", value: "{accounts.read().devto_key}",
-                        oninput: move |e| accounts.write().devto_key = e.value() }
-                }
-                div { class: "settings-field",
-                    label { "Hashnode" }
-                    div { class: "meta-row",
-                        div { class: "field meta-tags",
-                            input { r#type: "password", placeholder: "Personal access token", value: "{accounts.read().hashnode_token}",
-                                oninput: move |e| accounts.write().hashnode_token = e.value() }
-                        }
-                        div { class: "field meta-tags",
-                            input { placeholder: "Publication ID", value: "{accounts.read().hashnode_publication}",
-                                oninput: move |e| accounts.write().hashnode_publication = e.value() }
+                if blog_on() {
+                    p { class: "settings-hint",
+                        "Send a published post to these platforms from its editor, with your site's address as \
+                         canonical so search engines credit the original. The keys stay on this computer."
+                    }
+                    div { class: "settings-field",
+                        label { "dev.to API key" }
+                        input { r#type: "password", placeholder: "dev.to → Settings → Extensions", value: "{accounts.read().devto_key}",
+                            oninput: move |e| accounts.write().devto_key = e.value() }
+                    }
+                    div { class: "settings-field",
+                        label { "Hashnode" }
+                        div { class: "meta-row",
+                            div { class: "field meta-tags",
+                                input { r#type: "password", placeholder: "Personal access token", value: "{accounts.read().hashnode_token}",
+                                    oninput: move |e| accounts.write().hashnode_token = e.value() }
+                            }
+                            div { class: "field meta-tags",
+                                input { placeholder: "Publication ID", value: "{accounts.read().hashnode_publication}",
+                                    oninput: move |e| accounts.write().hashnode_publication = e.value() }
+                            }
                         }
                     }
-                }
-                div { class: "settings-field",
-                    label { "WordPress" }
-                    input { placeholder: "https://your-wordpress-site.com", value: "{accounts.read().wordpress_url}",
-                        oninput: move |e| accounts.write().wordpress_url = e.value() }
-                    div { class: "meta-row",
-                        div { class: "field meta-tags",
-                            input { placeholder: "User name", value: "{accounts.read().wordpress_user}",
-                                oninput: move |e| accounts.write().wordpress_user = e.value() }
+                    div { class: "settings-field",
+                        label { "WordPress" }
+                        input { placeholder: "https://your-wordpress-site.com", value: "{accounts.read().wordpress_url}",
+                            oninput: move |e| accounts.write().wordpress_url = e.value() }
+                        div { class: "meta-row",
+                            div { class: "field meta-tags",
+                                input { placeholder: "User name", value: "{accounts.read().wordpress_user}",
+                                    oninput: move |e| accounts.write().wordpress_user = e.value() }
+                            }
+                            div { class: "field meta-tags",
+                                input { r#type: "password", placeholder: "Application password", value: "{accounts.read().wordpress_password}",
+                                    oninput: move |e| accounts.write().wordpress_password = e.value() }
+                            }
                         }
-                        div { class: "field meta-tags",
-                            input { r#type: "password", placeholder: "Application password", value: "{accounts.read().wordpress_password}",
-                                oninput: move |e| accounts.write().wordpress_password = e.value() }
-                        }
+                        p { class: "settings-hint", "An application password, from Users → Profile in WordPress — not the one you log in with." }
                     }
-                    p { class: "settings-hint", "An application password, from Users → Profile in WordPress — not the one you log in with." }
-                }
-                div { class: "settings-field",
-                    label { "Ghost" }
-                    div { class: "meta-row",
-                        div { class: "field meta-tags",
-                            input { placeholder: "https://your-site.ghost.io", value: "{accounts.read().ghost_url}",
-                                oninput: move |e| accounts.write().ghost_url = e.value() }
+                    div { class: "settings-field",
+                        label { "Ghost" }
+                        div { class: "meta-row",
+                            div { class: "field meta-tags",
+                                input { placeholder: "https://your-site.ghost.io", value: "{accounts.read().ghost_url}",
+                                    oninput: move |e| accounts.write().ghost_url = e.value() }
+                            }
+                            div { class: "field meta-tags",
+                                input { r#type: "password", placeholder: "Admin API key (id:secret)", value: "{accounts.read().ghost_key}",
+                                    oninput: move |e| accounts.write().ghost_key = e.value() }
+                            }
                         }
-                        div { class: "field meta-tags",
-                            input { r#type: "password", placeholder: "Admin API key (id:secret)", value: "{accounts.read().ghost_key}",
-                                oninput: move |e| accounts.write().ghost_key = e.value() }
-                        }
+                        p { class: "settings-hint", "From Settings → Integrations → Add custom integration in Ghost." }
                     }
-                    p { class: "settings-hint", "From Settings → Integrations → Add custom integration in Ghost." }
+                    label { class: "settings-check",
+                        input { r#type: "checkbox", checked: accounts.read().as_draft,
+                            onchange: move |e| accounts.write().as_draft = e.checked() }
+                        "Send copies as drafts, to publish there after a look"
+                    }
                 }
                 div { class: "settings-field",
                     label { "Bluesky" }
@@ -309,11 +367,6 @@ pub(super) fn SettingsModal(
                         }
                     }
                     p { class: "settings-hint", "From Preferences → Development → New application, with write:statuses." }
-                }
-                label { class: "settings-check",
-                    input { r#type: "checkbox", checked: accounts.read().as_draft,
-                        onchange: move |e| accounts.write().as_draft = e.checked() }
-                    "Send copies as drafts, to publish there after a look"
                 }
 
                 if !saved_msg.read().is_empty() {
@@ -348,6 +401,8 @@ pub(super) fn SettingsModal(
                             site.deploy_command = deploy_cmd.read().trim().to_string();
                             site.deploy_after_publish = deploy_after();
                             site.post_url = post_url.read().trim().to_string();
+                            site.blog = blog_on();
+                            site.hidden_networks = hidden.read().clone();
                             // Kept only when it differs from what the framework would use.
                             let (dir, url) = (images_dir.read().trim().to_string(), images_url.read().trim().to_string());
                             site.images_dir = String::new();

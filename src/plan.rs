@@ -68,6 +68,12 @@ pub struct Plan {
     /// X drafts, as LinkedIn's.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub x: BTreeMap<String, Entry>,
+    /// Instagram drafts, as LinkedIn's.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub instagram: BTreeMap<String, Entry>,
+    /// TikTok drafts, as LinkedIn's.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub tiktok: BTreeMap<String, Entry>,
 }
 
 fn path(project_path: &str) -> PathBuf {
@@ -203,6 +209,8 @@ impl Plan {
         match channel {
             Channel::LinkedIn => &self.linkedin,
             Channel::X => &self.x,
+            Channel::Instagram => &self.instagram,
+            Channel::TikTok => &self.tiktok,
         }
     }
 
@@ -210,10 +218,12 @@ impl Plan {
         match channel {
             Channel::LinkedIn => &mut self.linkedin,
             Channel::X => &mut self.x,
+            Channel::Instagram => &mut self.instagram,
+            Channel::TikTok => &mut self.tiktok,
         }
     }
 
-    /// When a LinkedIn or X draft is planned to go out: `2026-11-02T09:00`.
+    /// When a network's draft is planned to go out: `2026-11-02T09:00`.
     pub fn social_at(&self, channel: Channel, lang: &str, filename: &str) -> Option<String> {
         self.social(channel)
             .get(&key(lang, filename))
@@ -270,7 +280,7 @@ pub fn update(
     plan.save(project_path)
 }
 
-/// When a LinkedIn or X draft is planned to go out: `2026-11-02T09:00`.
+/// When a network's draft is planned to go out: `2026-11-02T09:00`.
 pub fn social_at(
     project_path: &str,
     channel: Channel,

@@ -21,16 +21,25 @@ pub struct SocialPosts {
 pub enum Channel {
     LinkedIn,
     X,
+    Instagram,
+    TikTok,
 }
 
 impl Channel {
-    pub const ALL: [Channel; 2] = [Channel::LinkedIn, Channel::X];
+    pub const ALL: [Channel; 4] = [
+        Channel::LinkedIn,
+        Channel::X,
+        Channel::Instagram,
+        Channel::TikTok,
+    ];
 
     /// As the MCP tools' `kind` names it, and as its folder is named.
     pub fn key(self) -> &'static str {
         match self {
             Channel::LinkedIn => "linkedin",
             Channel::X => "x",
+            Channel::Instagram => "instagram",
+            Channel::TikTok => "tiktok",
         }
     }
 
@@ -42,6 +51,8 @@ impl Channel {
         match self {
             Channel::LinkedIn => "LinkedIn",
             Channel::X => "X",
+            Channel::Instagram => "Instagram",
+            Channel::TikTok => "TikTok",
         }
     }
 
@@ -50,14 +61,19 @@ impl Channel {
         match self {
             Channel::LinkedIn => "in",
             Channel::X => "𝕏",
+            Channel::Instagram => "ig",
+            Channel::TikTok => "♪",
         }
     }
 
-    /// The longest post the network takes, in characters (X Premium takes longer ones).
+    /// The longest post the network takes, in characters (X Premium takes longer ones). A
+    /// caption, on Instagram and TikTok; TikTok's is as its app takes it.
     pub fn limit(self) -> usize {
         match self {
             Channel::LinkedIn => 3000,
             Channel::X => 280,
+            Channel::Instagram => 2200,
+            Channel::TikTok => 4000,
         }
     }
 
@@ -66,11 +82,50 @@ impl Channel {
         match self {
             Channel::LinkedIn => 20,
             Channel::X => 4,
+            Channel::Instagram => 20,
+            Channel::TikTok => 35,
         }
+    }
+
+    /// Hashtags a post takes, when the network caps them: Instagram went from 30 to 5 at the
+    /// end of 2025.
+    pub fn max_hashtags(self) -> Option<usize> {
+        match self {
+            Channel::Instagram => Some(5),
+            _ => None,
+        }
+    }
+
+    /// A post is its photos or its video, the text a caption under them: there is no post
+    /// without one.
+    pub fn needs_media(self) -> bool {
+        matches!(self, Channel::Instagram | Channel::TikTok)
+    }
+
+    /// An address in the text opens when clicked. Instagram and TikTok show it as plain
+    /// text, so a link goes in the profile instead.
+    pub fn links_clickable(self) -> bool {
+        matches!(self, Channel::LinkedIn | Channel::X)
+    }
+
+    /// Photos and videos may share one post: an Instagram carousel takes both.
+    pub fn mixes_media(self) -> bool {
+        self == Channel::Instagram
     }
 }
 
-/// A standalone post for LinkedIn or X, about a product, a feature, or a blog post.
+/// How many hashtags a text has: words that start with `#` and go on with a letter or digit.
+pub fn hashtags(text: &str) -> usize {
+    text.split_whitespace()
+        .filter(|w| {
+            w.strip_prefix('#')
+                .and_then(|rest| rest.chars().next())
+                .is_some_and(char::is_alphanumeric)
+        })
+        .count()
+}
+
+/// A standalone post for a network (LinkedIn, X, Instagram, TikTok), about a product, a feature, or a blog post.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SocialPost {
     pub channel: Channel,
@@ -87,6 +142,8 @@ pub struct SocialPost {
     pub body: String,
     /// Its images, or its one video: files beside it, by name, as `media` lists them.
     pub media: Vec<String>,
+    /// The recording it was repurposed from, with the clip or slides it carries.
+    pub origin: Option<crate::repurpose::Origin>,
 }
 
 impl SocialPost {
@@ -484,8 +541,8 @@ pub struct ProjectConfig {
     /// A post's address, for its social teasers: `{site_url}`, `{lang}`, `{slug}`, `{year}`,
     /// `{month}` and `{day}` are filled in.
     pub post_url: String,
-    /// Where LinkedIn posts are kept, per language; empty: `content/{lang}/linkedin`. X posts
-    /// are kept beside them, in `x`.
+    /// Where LinkedIn posts are kept, per language; empty: `content/{lang}/linkedin`. The
+    /// other networks' are kept beside them, in `x`, `instagram` and `tiktok`.
     pub linkedin_dir: String,
     /// Puts the site online, run in its folder from the Deploy button: `git push`, `npm run
     /// deploy`, `vercel --prod`… Empty: no Deploy.
@@ -496,6 +553,10 @@ pub struct ProjectConfig {
     pub images_dir: String,
     /// The address the site serves `images_dir` at, for the markdown link; empty: the preset's.
     pub images_url: String,
+    /// The Blog and Board tabs show: off for a folder kept for social posts only.
+    pub blog: bool,
+    /// Networks whose tab is hidden, by key (`instagram`): ones the person doesn't post on.
+    pub hidden_networks: Vec<String>,
 }
 
 impl Default for ProjectConfig {
@@ -522,6 +583,8 @@ impl Default for ProjectConfig {
             images_url: String::new(),
             deploy_command: String::new(),
             deploy_after_publish: false,
+            blog: true,
+            hidden_networks: vec![],
         }
     }
 }

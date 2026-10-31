@@ -1,4 +1,4 @@
-//! A LinkedIn or X post's images or video: files beside the post, listed in its front matter
+//! A social post's images or video: files beside the post, listed in its front matter
 //! (`media: [cover.png]`), moved and deleted with it.
 
 use super::*;
@@ -26,7 +26,8 @@ pub fn media_of(content: &str) -> Vec<String> {
     frontmatter::list(&frontmatter::fields(content), "media")
 }
 
-/// Refused unless it is images (as many as the network takes) or one video.
+/// Refused unless it is images (as many as the network takes) or one video; on Instagram, as
+/// many photos and videos as a carousel takes.
 fn check(names: &[String], channel: Channel) -> Result<()> {
     let mut kinds = Vec::with_capacity(names.len());
     for name in names {
@@ -37,7 +38,14 @@ fn check(names: &[String], channel: Channel) -> Result<()> {
             ),
         }
     }
-    if kinds.contains(&Media::Video) && kinds.len() > 1 {
+    if kinds.len() > channel.max_images() && channel.mixes_media() {
+        bail!(
+            "{} takes at most {} photos and videos in a post",
+            channel.label(),
+            channel.max_images()
+        );
+    }
+    if kinds.contains(&Media::Video) && kinds.len() > 1 && !channel.mixes_media() {
         bail!(
             "a post on {} has images or one video, not both or several videos",
             channel.label()

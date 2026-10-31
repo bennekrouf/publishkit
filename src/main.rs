@@ -8,6 +8,7 @@ mod kit;
 mod mcp;
 mod plan;
 mod pro;
+mod repurpose;
 mod screens;
 mod social;
 mod state;

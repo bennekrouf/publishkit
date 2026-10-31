@@ -118,7 +118,8 @@ Click a post, draft or published, to open it in the center editor. Edit the raw 
 (`src/mcp.rs`); the **MCP** button in the top bar shows the Claude Desktop config and the
 Claude Code command. The tools: `project`, `list_posts`, `get_post`, `queue_post`,
 `update_post`, `set_social`, `publish_post`, `schedule_post`, `crosspost_post`,
-`delete_post` and `queue_linkedin`. They call
+`delete_post`, `set_date`, `queue_linkedin`, `queue_x`, `queue_instagram`,
+`queue_tiktok` and `repurpose`. They call
 the app's own `state` and `api` functions, so files, front matter, slugs and the publish
 step are the same; the configured model is only called when a tool is asked to generate.
 They default to the site open in the app. The window checks the post folders every 2 s and

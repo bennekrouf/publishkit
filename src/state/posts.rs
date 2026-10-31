@@ -209,6 +209,7 @@ pub(super) fn parse_social_post(path: PathBuf, channel: Channel, lang: &str) -> 
         publish_at: None,
         body,
         media: frontmatter::list(&fields, "media"),
+        origin: crate::repurpose::Origin::of(&fields),
     })
 }
 
