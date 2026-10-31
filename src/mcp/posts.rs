@@ -178,7 +178,9 @@ pub(super) fn update_post(args: &Value) -> Result<Value, String> {
     };
     let channel = match (kind, &media) {
         (None, Some(_)) => {
-            return Err("media is for LinkedIn and X posts (kind linkedin or x)".into())
+            return Err(
+                "media is for a network's posts (kind linkedin, x, instagram or tiktok)".into(),
+            )
         }
         (channel, _) => channel,
     };
@@ -340,7 +342,7 @@ pub(super) fn schedule(args: &Value) -> Result<Value, String> {
     Ok(json!({ "post": name, "stage": entry.stage.key(), "publish_at": entry.publish_at }))
 }
 
-/// A LinkedIn or X draft's planned date: on the calendar, never posted by PublishKit.
+/// A network draft's planned date: on the calendar, never posted by PublishKit.
 fn schedule_social(
     args: &Value,
     project: &str,
@@ -447,7 +449,7 @@ pub(super) fn delete(args: &Value) -> Result<Value, String> {
     Ok(json!({ "deleted": name }))
 }
 
-/// `queue_linkedin` and `queue_x`: a post for the network, as the user wrote it, or written by
+/// `queue_linkedin`, `queue_x`, `queue_instagram` and `queue_tiktok`: a post for the network, as the user wrote it, or written by
 /// PublishKit's model when asked.
 pub(super) async fn queue_social(args: &Value, channel: Channel) -> Result<Value, String> {
     let project = project_path(args)?;
@@ -518,17 +520,37 @@ pub(super) async fn queue_social(args: &Value, channel: Channel) -> Result<Value
     v["words"] = json!(words(&body));
     v["characters"] = json!(characters);
     v["media"] = json!(attached);
+    let mut notes = Vec::new();
     if characters > channel.limit() {
         let premium = if channel == Channel::X {
             ", longer posts only with X Premium"
         } else {
             ""
         };
-        v["note"] = json!(format!(
+        notes.push(format!(
             "{characters} characters: {} takes {}{premium}",
             channel.label(),
             channel.limit()
         ));
+    }
+    if let Some(max) = channel.max_hashtags() {
+        let tags = crate::state::hashtags(&body);
+        if tags > max {
+            notes.push(format!(
+                "{tags} hashtags: {} takes at most {max}, the rest may be ignored or the post refused",
+                channel.label()
+            ));
+        }
+    }
+    if channel.needs_media() && attached.is_empty() {
+        notes.push(format!(
+            "no media yet: {} shows no post without a photo or a video, so attach one with media, \
+             or the user adds it in PublishKit",
+            channel.label()
+        ));
+    }
+    if !notes.is_empty() {
+        v["note"] = json!(notes.join("; "));
     }
     Ok(v)
 }

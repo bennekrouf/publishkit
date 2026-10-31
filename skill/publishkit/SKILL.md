@@ -1,6 +1,6 @@
 ---
 name: publishkit
-description: How to manage a blog with PublishKit, the desktop app that keeps a website's posts as markdown drafts per language with a publishing queue, a schedule, and LinkedIn and X posts. Read this skill before calling any publishkit tool (project, list_posts, get_post, queue_post, update_post, publish_post, schedule_post, queue_linkedin, queue_x, set_date, delete_post), because it has the site-voice rules, which actions go live and need the user's yes, and how to report drafts. Use it whenever the user mentions PublishKit, or asks to draft, queue, edit, translate, schedule, publish or delete a blog post on their site, plan a content calendar from what is already published, write or save LinkedIn or X posts or teasers, or change a post's date.
+description: How to manage a blog with PublishKit, the desktop app that keeps a website's posts as markdown drafts per language with a publishing queue, a schedule, and LinkedIn, X, Instagram and TikTok posts (some folders hold social posts only). Read this skill before calling any publishkit tool (project, list_posts, get_post, queue_post, update_post, publish_post, schedule_post, queue_linkedin, queue_x, queue_instagram, queue_tiktok, repurpose, set_date, delete_post), because it has the site-voice rules, which actions go live and need the user's yes, and how to report drafts. Use it whenever the user mentions PublishKit, or asks to draft, queue, edit, translate, schedule, publish or delete a blog post on their site, plan a content calendar from what is already published, write or save LinkedIn, X, Instagram or TikTok posts or teasers, change a post's date, or repurpose a finished video or audio recording (PolishCast, TrackCut) into clips, carousel slides, social posts and a blog draft.
 ---
 
 # PublishKit
@@ -39,13 +39,30 @@ is available, the app is not connected:
    in the site's voice, following the brief from `project`, or pass
    `generate: true` to have PublishKit's configured model write it (that
    spends the user's AI credits). `update_post` edits a draft.
-4. **Social posts.** `queue_linkedin` and `queue_x` add a standalone post.
-   The user usually writes these: save the text they give exactly as given,
-   and write or generate one only when asked. Posts can carry images or one
-   video (`media`, as file paths). With `published_at` a post is saved as
-   already posted. `set_social` sets the older teasers kept with a blog post.
-5. **Plan.** `schedule_post` sets a draft's stage (idea, draft, review) and
-   the date and time it publishes by itself. For a LinkedIn or X draft the
+4. **Social posts.** `queue_linkedin`, `queue_x`, `queue_instagram` and
+   `queue_tiktok` add a standalone post. The user usually writes these: save
+   the text they give exactly as given, and write or generate one only when
+   asked. Posts can carry images or one video (`media`, as file paths); an
+   Instagram carousel mixes both. An Instagram or TikTok post is a caption
+   under its photos or video: say when one has no media yet, and don't paste
+   links into it, where they can't be clicked (the link goes in the bio).
+   Instagram takes at most 5 hashtags in a post or reel. With
+   `published_at` a post is saved as already posted. `set_social` sets the
+   older teasers kept with a blog post. When `project` says `blog: false`,
+   the folder holds social posts only: don't offer blog drafts.
+5. **Repurpose a recording.** `repurpose` turns one finished PolishCast
+   video or TrackCut audio file and its transcript into drafts in one call
+   to PublishKit's model (it spends the user's AI credits): short clips as
+   TikTok drafts with their start and end, an Instagram carousel with its
+   slides, a LinkedIn and an X post, and a blog draft or outline. The
+   transcript is required: pass its text or file, or it is found beside the
+   recording by the same name (`talk.srt` for `talk.mp4`); subtitles give
+   clips their times, plain text only the passage to cut. PublishKit doesn't
+   cut the clips or draw the slides: say so, and that every draft can be
+   edited or deleted before posting. When the user has no transcript, ask
+   for one rather than making times up.
+6. **Plan.** `schedule_post` sets a draft's stage (idea, draft, review) and
+   the date and time it publishes by itself. For a network's draft the
    schedule is only a reminder on the calendar. `set_date` changes a post's
    date, published ones included.
 

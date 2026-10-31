@@ -23,26 +23,35 @@ mod tools;
 use tools::*;
 mod posts;
 use posts::*;
+mod repurpose;
+use repurpose::*;
 
 /// The newest protocol revision this server speaks. A client asking for an older one gets its
 /// own back; everything used here exists in all of them.
 const PROTOCOL: &str = "2025-06-18";
 
 const INSTRUCTIONS: &str = "PublishKit manages a website's blog as markdown files: drafts wait, per language, \
-until they are published; LinkedIn and X posts are kept the same way, each on its own, not tied to a blog post. \
-Start with project, which gives the site, the framework it is built with, its languages and how many posts each \
-has; tools default to the project open in PublishKit. list_posts and get_post read posts (kind blog, linkedin or \
-x). queue_post adds a blog draft: write its body yourself in the site's voice (project gives the site's own \
-writing brief), or pass generate: true to have PublishKit's configured model write it. queue_linkedin and \
-queue_x add a LinkedIn or X post: the user usually writes these, so save the text they give as it is, and write \
-or generate one only when asked; with published_at it is saved as already posted. update_post edits a draft; \
-set_social sets the older LinkedIn and X teasers kept with a blog post. publish_post makes a draft live: it is \
-dated today (or published_at, for a post that went out earlier) and the site's publish command, if it has one, \
-runs, so ask the user before publishing, and before delete_post. schedule_post sets a draft's stage (idea, \
-draft, review) and the date and time it is published by itself; ask the user before scheduling. A LinkedIn or \
-X post can carry images or one video: media (file paths) on queue_linkedin, queue_x or update_post, posted posts \
-included. PublishKit never posts to LinkedIn or X itself: such a draft's schedule is a reminder on the calendar. \
-set_date changes the date and time of a post, published ones included.";
+until they are published; LinkedIn, X, Instagram and TikTok posts are kept the same way, each on its own, not \
+tied to a blog post. Some folders are kept for social posts only: project says so (blog: false), and has no \
+blog to write for. Start with project, which gives the site, the framework it is built with, its languages and \
+how many posts each has; tools default to the project open in PublishKit. list_posts and get_post read posts \
+(kind blog, linkedin, x, instagram or tiktok). queue_post adds a blog draft: write its body yourself in the \
+site's voice (project gives the site's own writing brief), or pass generate: true to have PublishKit's \
+configured model write it. queue_linkedin, queue_x, queue_instagram and queue_tiktok add a post for that \
+network: the user usually writes these, so save the text they give as it is, and write or generate one only \
+when asked; with published_at it is saved as already posted. An Instagram or TikTok post is a caption under \
+photos or a video, and its links can't be clicked; Instagram takes at most 5 hashtags. update_post edits a draft; set_social sets the older \
+LinkedIn and X teasers kept with a blog post. publish_post makes a draft live: it is dated today (or \
+published_at, for a post that went out earlier) and the site's publish command, if it has one, runs, so ask \
+the user before publishing, and before delete_post. schedule_post sets a draft's stage (idea, draft, review) and \
+the date and time it is published by itself; ask the user before scheduling. A network's post can carry images \
+or one video (an Instagram carousel mixes both): media (file paths) on its queue tool or update_post, posted \
+posts included. PublishKit never posts to a network itself: such a draft's schedule is a reminder on the \
+calendar. set_date changes the date and time of a post, published ones included. repurpose turns a \
+finished recording (a PolishCast video or a TrackCut audio file) and its transcript into drafts at once: clips \
+to cut with their times, a carousel's slides, a post per network and a blog draft. \
+Before calling these tools, read the publishkit skill if one is available: it has the confirmation \
+rules, defaults and report layouts that these instructions leave out.";
 
 pub fn serve() {
     let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -164,6 +173,9 @@ async fn call(name: &str, args: &Value) -> Result<Value, String> {
         "crosspost_post" => crosspost(args).await,
         "queue_linkedin" => queue_social(args, Channel::LinkedIn).await,
         "queue_x" => queue_social(args, Channel::X).await,
+        "queue_instagram" => queue_social(args, Channel::Instagram).await,
+        "queue_tiktok" => queue_social(args, Channel::TikTok).await,
+        "repurpose" => repurpose(args).await,
         _ => Err(format!("no tool {name}")),
     }
 }
@@ -391,6 +403,9 @@ fn project_info(args: &Value) -> Result<Value, String> {
         "author": cfg.author,
         "default_tags": cfg.default_tags,
         "writing_brief": cfg.system_prompt,
+        // A folder kept for social posts only has no blog to write for.
+        "blog": cfg.blog,
+        "networks": cfg.networks().iter().map(|c| c.key()).collect::<Vec<_>>(),
         "social_teasers": cfg.social_enabled,
         "framework": cfg.preset.map(|p| p.label()),
         "title_heading": cfg.title_heading,

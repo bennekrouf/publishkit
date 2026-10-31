@@ -1,4 +1,4 @@
-//! The LinkedIn and X tabs: a network's posts, the one being written and its preview.
+//! The networks' tabs (LinkedIn, X, Instagram, TikTok): a network's posts, the one being written and its preview.
 
 use super::*;
 
@@ -74,6 +74,12 @@ pub(super) fn SocialItem(
                 "{date_label(&post)}"
                 if let Some(label) = media_label(&post.media) {
                     span { class: "post-item-media", title: "Attached to the post", "{label}" }
+                } else if post.channel.needs_media() {
+                    span {
+                        class: "post-item-media missing",
+                        title: "{label} needs a photo or a video: add one from its preview",
+                        "no media"
+                    }
                 }
             }
             if let Some(at) = &post.publish_at {
@@ -145,7 +151,7 @@ pub(super) fn SocialItem(
 pub(crate) fn media_label(media: &[String]) -> Option<String> {
     let first = media.first()?;
     Some(match api::Media::of(first) {
-        Some(api::Media::Video) => "🎞 video".to_string(),
+        Some(api::Media::Video) if media.len() == 1 => "🎞 video".to_string(),
         _ => format!("🖼 {}", media.len()),
     })
 }
@@ -220,14 +226,117 @@ fn date_label(post: &SocialPost) -> String {
     }
 }
 
+/// What a post is missing or will look like on its network, a line each: for the notes
+/// under its preview.
+pub(super) fn notes(post: &SocialPost) -> Vec<String> {
+    let channel = post.channel;
+    let label = channel.label();
+    let has_link = api::split_links(&post.body).iter().any(|(_, l)| *l);
+    let mut notes = Vec::new();
+    if channel.needs_media() && post.media.is_empty() {
+        notes.push(format!(
+            "{label} needs a photo or a video: add one with Add media…, the text is its caption."
+        ));
+    }
+    if has_link && !channel.links_clickable() {
+        notes.push(format!(
+            "Links in a {label} caption can't be clicked: put it in your bio and say so here."
+        ));
+    }
+    if channel == Channel::LinkedIn && !post.media.is_empty() && has_link {
+        notes.push(
+            "LinkedIn won't show a link preview card on posts with images or video. The link stays clickable."
+                .to_string(),
+        );
+    }
+    if let Some(max) = channel.max_hashtags() {
+        let tags = crate::state::hashtags(&post.body);
+        if tags > max {
+            notes.push(format!(
+                "{label} takes at most {max} hashtags in a post or reel; this has {tags}. The \
+                 rest may be ignored, or the post refused."
+            ));
+        }
+    }
+    // Size and shape: read from each image's header, never enforced. A video's isn't read.
+    let mut sized = post
+        .media
+        .iter()
+        .filter(|name| api::Media::of(name) == Some(api::Media::Image))
+        .filter_map(|name| {
+            let size = imagesize::size(post.media_path(name)).ok()?;
+            image_note(channel, name, size.width, size.height)
+        });
+    if let Some(first) = sized.next() {
+        let more = sized.count();
+        notes.push(match more {
+            0 => first,
+            n => format!("{first} ({n} more like it.)"),
+        });
+    }
+    if channel == Channel::Instagram && post.media.len() > 10 {
+        notes.push(
+            "Instagram's app takes 20 photos and videos in a carousel, but some accounts and \
+             posting tools still stop at 10."
+                .to_string(),
+        );
+    }
+    notes
+}
+
+/// What a network will do to an image of `width`×`height`, when it isn't what the network
+/// recommends: cropped to its shape, or shown soft for being small. Only a warning: the
+/// networks take other sizes too.
+pub(super) fn image_note(
+    channel: Channel,
+    name: &str,
+    width: usize,
+    height: usize,
+) -> Option<String> {
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let ratio = width as f64 / height as f64;
+    let size = format!("{name} is {width}×{height}");
+    match channel {
+        // Instagram's feed takes 4:5 to 1.91:1 and crops the rest.
+        Channel::Instagram if !(0.79..=1.92).contains(&ratio) => Some(format!(
+            "{size}: Instagram crops photos to between 4:5 and 1.91:1, as the preview shows. \
+             Recommended 1080×1350 (4:5)."
+        )),
+        Channel::Instagram if width < 1080 => Some(format!(
+            "{size}: Instagram shows photos 1080 pixels wide, so it may look soft. \
+             Recommended 1080×1350 (4:5)."
+        )),
+        // 9:16 is 0.5625: anything much wider shows with bars or cropped.
+        Channel::TikTok if ratio > 0.6 => Some(format!(
+            "{size}: TikTok fills the screen at 9:16, so it shows cropped or with bars. \
+             Recommended 1080×1920, vertical."
+        )),
+        Channel::TikTok if width < 1080 => Some(format!(
+            "{size}: TikTok shows it 1080 pixels wide, so it may look soft. Recommended 1080×1920."
+        )),
+        Channel::LinkedIn if width.max(height) < 1080 => Some(format!(
+            "{size}, small for LinkedIn: 1080×1080, 1080×1350 or 1200×627 look sharp. Other \
+             sizes usually work."
+        )),
+        Channel::X if width.max(height) < 1080 => Some(format!(
+            "{size}, small for X: 1600×900 or 1080×1080 look sharp. Other sizes usually work."
+        )),
+        _ => None,
+    }
+}
+
 /// `212 / 280`, red past the network's limit.
 #[component]
 fn CharCount(channel: Channel, text: String) -> Element {
     let count = text.trim().chars().count();
     let limit = channel.limit();
     let tip = match channel {
-        Channel::X => "X takes 280 characters; longer posts need X Premium",
+        Channel::X => "X takes 280 characters; up to 25,000 with X Premium",
         Channel::LinkedIn => "LinkedIn takes 3,000 characters",
+        Channel::Instagram => "Instagram takes 2,200 characters and 5 hashtags in a caption",
+        Channel::TikTok => "TikTok's app takes 4,000 characters in a caption",
     };
     rsx! {
         span {
@@ -281,6 +390,10 @@ pub(super) fn SocialCenterPanel(
             "What you want to tell your network: the news, why it matters, a link…"
         }
         Channel::X => "Your post: one idea, short, a link if it has one…",
+        Channel::Instagram => {
+            "The caption under your photo or video: a first line that stops the scroll, a few hashtags…"
+        }
+        Channel::TikTok => "The caption under your video: a hook, one idea, a few hashtags…",
     };
 
     rsx! {
@@ -518,6 +631,25 @@ pub(super) fn SocialPreviewPanel(
     let icon = match channel {
         Channel::LinkedIn => "social-icon",
         Channel::X => "social-icon social-icon-x",
+        Channel::Instagram => "social-icon social-icon-ig",
+        Channel::TikTok => "social-icon social-icon-tt",
+    };
+    // Instagram and TikTok show the photos or the video first, the caption under them, in
+    // the shape the feed crops them to.
+    let card = if channel.needs_media() {
+        "social-card media-first"
+    } else {
+        "social-card"
+    };
+    let shape = match channel {
+        Channel::Instagram => " media-ig",
+        Channel::TikTok => " media-tt",
+        _ => "",
+    };
+    let media_kinds = if channel.mixes_media() {
+        "Photos and videos"
+    } else {
+        "Images or one video"
     };
 
     rsx! {
@@ -531,7 +663,10 @@ pub(super) fn SocialPreviewPanel(
                         "{p.status}"
                     }
                 }
-                div { class: "social-card",
+                if let Some(origin) = p.origin.clone() {
+                    Origin { origin }
+                }
+                div { class: card,
                     div { class: "social-card-header",
                         span { class: icon, "{channel.badge()}" }
                         span { "{channel.label()}" }
@@ -548,7 +683,7 @@ pub(super) fn SocialPreviewPanel(
                         }
                         button {
                             class: "btn-copy",
-                            title: "Images or one video, copied next to the post",
+                            title: "{media_kinds}, copied next to the post",
                             onclick: {
                                 let p = p.clone();
                                 move |_| {
@@ -632,13 +767,11 @@ pub(super) fn SocialPreviewPanel(
                     if !media_error.read().is_empty() {
                         p { class: "status-msg", "{media_error}" }
                     }
-                    if channel == Channel::LinkedIn && !p.media.is_empty() && api::split_links(&p.body).iter().any(|(_, l)| *l) {
-                        p { class: "social-note",
-                            "LinkedIn won't show a link preview card on posts with images or video. The link stays clickable."
-                        }
+                    for note in notes(&p) {
+                        p { class: "social-note", "{note}" }
                     }
                     if !media.read().is_empty() {
-                        div { class: if media.read().len() == 1 { "li-media single" } else { "li-media" },
+                        div { class: if media.read().len() == 1 { "li-media single{shape}" } else { "li-media{shape}" },
                             for item in media.read().iter().cloned() {
                                 div { class: "li-media-cell",
                                     match item.clone() {
@@ -720,6 +853,64 @@ pub(super) fn SocialPreviewPanel(
             } else {
                 div { class: "preview-empty",
                     p { "Select a post or write a new one to preview it here." }
+                }
+            }
+        }
+    }
+}
+
+/// Where a repurposed draft came from: the clip to cut from the recording, or the carousel's
+/// slides to make.
+#[component]
+fn Origin(origin: crate::repurpose::Origin) -> Element {
+    use crate::repurpose::clock;
+    let mut copied = use_signal(|| false);
+    let slides = origin.slides.clone();
+    let cut = match origin.clip {
+        Some((start, end)) => Some(format!(
+            "Cut {} → {} ({} s)",
+            clock(start),
+            clock(end),
+            (end - start).round()
+        )),
+        None if !origin.quote.is_empty() => {
+            Some(format!("Cut the passage starting “{}”", origin.quote))
+        }
+        None => None,
+    };
+    rsx! {
+        div { class: "repurpose-origin",
+            div { class: "repurpose-origin-head",
+                span { "From " }
+                button {
+                    class: "btn-link",
+                    title: "{origin.source}",
+                    onclick: {
+                        let source = origin.source.clone();
+                        move |_| open_file(std::path::Path::new(&source))
+                    },
+                    "{origin.source_name()}"
+                }
+            }
+            if let Some(cut) = cut {
+                p { class: "repurpose-cut", "{cut}" }
+            }
+            if !origin.hook.is_empty() {
+                p { class: "repurpose-hook", "On screen: “{origin.hook}”" }
+            }
+            if !slides.is_empty() {
+                ol { class: "repurpose-slides",
+                    for (i, slide) in slides.iter().enumerate() {
+                        li { key: "{i}", "{slide}" }
+                    }
+                }
+                button {
+                    class: "btn-micro",
+                    onclick: move |_| {
+                        copy_to_clipboard(&slides.join("\n\n"));
+                        copied.set(true);
+                    },
+                    if copied() { "Copied ✓" } else { "Copy the slides" }
                 }
             }
         }

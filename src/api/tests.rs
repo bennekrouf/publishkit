@@ -549,3 +549,67 @@ fn the_model_is_told_to_keep_the_link_as_it_is_only_when_there_is_one() {
     assert!(!plain.contains("Link:"));
     assert!(plain.contains("Angle / key points: fast\n\nOutput ONLY"));
 }
+
+#[test]
+fn an_instagram_carousel_mixes_photos_and_videos_and_tiktok_takes_35_photos() {
+    let (root, _) = site(&[
+        ("q/p.md", "---\ntopic: \"P\"\n---\nBody"),
+        ("x.png", "png"),
+        ("clip.mp4", "mp4"),
+    ]);
+    let post = root.join("q/p.md");
+    let mixed = [root.join("x.png"), root.join("clip.mp4")];
+    assert_eq!(
+        set_media(&post, Channel::Instagram, &mixed).unwrap().len(),
+        2
+    );
+    let err = set_media(&post, Channel::TikTok, &mixed)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("images or one video"), "{err}");
+    let err = set_media(&post, Channel::Instagram, &vec![root.join("x.png"); 21])
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("Instagram takes at most 20 photos and videos"),
+        "{err}"
+    );
+    assert_eq!(
+        set_media(&post, Channel::TikTok, &vec![root.join("x.png"); 35])
+            .unwrap()
+            .len(),
+        35
+    );
+}
+
+#[test]
+fn a_folder_for_social_posts_only_keeps_each_network_in_a_folder_of_its_own() {
+    let (root, _) = site(&[]);
+    let folder = root.join("Social");
+    let folder = folder.to_string_lossy().to_string();
+    ProjectConfig::start_social_only(&folder).unwrap();
+    let cfg = ProjectConfig::load(&folder);
+    assert!(!cfg.blog);
+    assert_eq!(cfg.networks(), Channel::ALL);
+    let path = save_social_to_queue(&folder, &cfg, Channel::TikTok, "Launch", "en", "Hi").unwrap();
+    assert_eq!(
+        std::path::Path::new(&path).parent().unwrap(),
+        root.join("Social/tiktok/en/queue")
+    );
+    assert_eq!(
+        load_posts(&folder)
+            .social(Channel::TikTok, "en")
+            .queue
+            .len(),
+        1
+    );
+
+    // Opened again, it is as it was: the settings someone changed are never written over.
+    let mut changed = cfg.clone();
+    changed.hidden_networks = vec!["x".into()];
+    changed.save(&folder);
+    ProjectConfig::start_social_only(&folder).unwrap();
+    let again = ProjectConfig::load(&folder);
+    assert!(!again.networks().contains(&Channel::X));
+    assert_eq!(again.linkedin_dir, "linkedin");
+}

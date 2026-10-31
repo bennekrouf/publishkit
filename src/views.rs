@@ -225,7 +225,7 @@ fn BoardCard(
     }
 }
 
-/// One entry on the calendar: a blog post or a LinkedIn or X post, out already or planned.
+/// One entry on the calendar: a blog post or a network's post, out already or planned.
 #[derive(Clone, PartialEq)]
 enum Item {
     Blog(Post),
@@ -324,7 +324,7 @@ pub fn Calendar(
                 span { class: "calendar-title", "{first.format(\"%B %Y\")}" }
                 button { class: "btn-small", onclick: move |_| step(1), "›" }
                 button { class: "btn-small", onclick: move |_| month.set((today.year(), today.month())), "Today" }
-                span { class: "settings-hint", "Blog, LinkedIn and X posts on the day they went out; ⏱ scheduled drafts on the day they go out." }
+                span { class: "settings-hint", "Blog and social posts on the day they went out; ⏱ scheduled drafts on the day they go out." }
             }
             div { class: "calendar-head",
                 for name in WEEKDAYS {

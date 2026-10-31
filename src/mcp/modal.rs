@@ -17,7 +17,7 @@ pub fn McpModal(show: Signal<bool>) -> Element {
             }
             div { class: "modal-body",
                 p { class: "settings-hint mcp-lead",
-                    "Ask Claude to write, edit and translate your drafts and your LinkedIn and X posts, and \
+                    "Ask Claude to write, edit and translate your drafts and your LinkedIn, X, Instagram and TikTok posts, and \
                      publish when you say so. It works on the same posts as this window, and the lists here follow."
                 }
                 div { class: "settings-field",

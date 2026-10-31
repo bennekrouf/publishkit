@@ -396,6 +396,12 @@ select:focus { border-color: var(--blue); }
   flex-shrink: 0;
 }
 .social-icon-x { background: var(--bg0); border: 1px solid var(--border); font-size: 12px; }
+.social-icon-ig { background: linear-gradient(45deg, #f09433, #dc2743 50%, #bc1888); }
+.social-icon-tt { background: #000; border: 1px solid var(--border); font-size: 12px; }
+/* Instagram and TikTok: the photos or video first, the caption under them. */
+.social-card.media-first { display: flex; flex-direction: column; }
+.social-card.media-first .social-card-header { order: -2; }
+.social-card.media-first .li-media { order: -1; margin: 0 0 10px; }
 .social-card-header span:nth-child(2) {
   font-size: 12px; font-weight: 600; color: var(--text1); flex: 1;
 }
@@ -518,8 +524,9 @@ select:focus { border-color: var(--blue); }
 .mark-posted { flex-wrap: wrap; }
 .calendar-media { color: var(--text3); }
 .post-item-media { margin-left: 6px; color: var(--text3); }
+.post-item-media.missing { color: var(--red); }
 
-/* ── A LinkedIn post's images or video ── */
+/* ── A social post's images or video ── */
 .li-media { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
 .li-media.single { grid-template-columns: 1fr; }
 .li-media-item {
@@ -534,6 +541,13 @@ select:focus { border-color: var(--blue); }
 }
 .li-media.single .li-media-file { aspect-ratio: 16 / 9; }
 .li-media-file.missing { cursor: default; color: var(--red); border-style: dashed; }
+/* As the feeds crop them: Instagram 4:5, TikTok 9:16. */
+.li-media.media-ig .li-media-item,
+.li-media.media-ig.single .li-media-item { aspect-ratio: 4 / 5; object-fit: cover; max-height: none; }
+.li-media.media-tt { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.li-media.media-tt.single { grid-template-columns: minmax(0, 220px); justify-content: center; }
+.li-media.media-tt .li-media-item,
+.li-media.media-tt.single .li-media-item { aspect-ratio: 9 / 16; object-fit: cover; max-height: none; }
 .li-media-cell { position: relative; min-width: 0; }
 .li-media-remove {
   position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0;
@@ -562,6 +576,7 @@ select:focus { border-color: var(--blue); }
   letter-spacing: 0 !important; font-size: 12px !important; font-weight: 500 !important; color: var(--text2) !important;
 }
 .settings-check input { width: auto; }
+.settings-checks { display: flex; flex-wrap: wrap; gap: 2px 16px; }
 
 /* ── Cross-posting ── */
 .crosspost-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -574,6 +589,11 @@ select:focus { border-color: var(--blue); }
   background: var(--bg2); color: var(--text1);
 }
 .setup-sites { display: flex; flex-direction: column; gap: 6px; }
+.setup-social {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding-top: 20px; border-top: 1px solid var(--border);
+}
+.setup-social .setup-hint { flex-basis: 100%; }
 .setup-site {
   font-family: inherit; text-align: left; cursor: pointer;
   display: flex; flex-direction: column; gap: 2px; padding: 9px 12px;
@@ -649,3 +669,41 @@ select:focus { border-color: var(--blue); }
 .calendar-item.x { border-left: 3px solid var(--text1); }
 .calendar-item.scheduled.x { border-left: 3px dashed var(--text1); }
 .calendar-in.x { background: var(--text1); color: var(--bg0); }
+.calendar-item.instagram { border-left: 3px solid #dc2743; }
+.calendar-item.scheduled.instagram { border-left: 3px dashed #dc2743; }
+.calendar-in.instagram { background: linear-gradient(45deg, #f09433, #dc2743 50%, #bc1888); }
+.calendar-item.tiktok { border-left: 3px solid #25f4ee; }
+.calendar-item.scheduled.tiktok { border-left: 3px dashed #25f4ee; }
+.calendar-in.tiktok { background: #000; color: #fff; }
+
+/* ── Repurpose ───────────────────── */
+.repurpose-modal { width: 540px; }
+.repurpose-pick { display: flex; align-items: center; gap: 8px; }
+.repurpose-file {
+  flex: 1; min-width: 0; font-size: 12px; color: var(--text2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.repurpose-paste {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  background: var(--bg0); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text1); font-size: 12px; padding: 8px;
+}
+.repurpose-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.repurpose-row .settings-field { flex: 1; min-width: 110px; }
+.repurpose-result ul { margin: 6px 0 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.repurpose-result li { font-size: 12px; color: var(--text1); }
+.repurpose-kind {
+  display: inline-block; min-width: 64px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--text3);
+}
+.repurpose-error { font-size: 12px; color: var(--red); }
+.repurpose-origin {
+  margin: 10px 0; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg1); border: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text2);
+}
+.repurpose-origin-head { display: flex; align-items: center; gap: 4px; }
+.repurpose-cut { margin: 0; font-weight: 600; color: var(--text1); }
+.repurpose-hook { margin: 0; }
+.repurpose-slides { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.repurpose-origin .btn-micro { align-self: flex-start; }

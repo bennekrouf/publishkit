@@ -187,6 +187,11 @@ pub(super) fn PreviewPanel(
         .filter(|n| n.configured(&accounts))
         .collect();
 
+    // Only the networks this site shows a tab for.
+    let shown_networks = {
+        let project = config.read().project_path.clone().unwrap_or_default();
+        ProjectConfig::load(&project).networks()
+    };
     rsx! {
         div { class: "panel panel-right",
             if let Some(p) = post {
@@ -199,12 +204,12 @@ pub(super) fn PreviewPanel(
                     }
                 }
 
-                // A LinkedIn or X post about it, written on that network's tab.
+                // A post about it on each network, written on that network's tab.
                 div { class: "share-row",
-                    for channel in Channel::ALL {
+                    for channel in shown_networks {
                         button {
                             class: "btn-copy",
-                            title: "Write a {channel.label()} post about this one, its link in it",
+                            title: "Write a {channel.label()} post about this one",
                             onclick: {
                                 let p = p.clone();
                                 move |_| {
@@ -220,7 +225,12 @@ pub(super) fn PreviewPanel(
                                         topic: p.title.clone(),
                                         angle: p.description.trim().to_string(),
                                         link: url.clone(),
-                                        body: format!("{}\n\n{url}", p.title).trim().to_string(),
+                                        // Instagram and TikTok can't link from the caption.
+                                        body: if channel.links_clickable() {
+                                            format!("{}\n\n{url}", p.title).trim().to_string()
+                                        } else {
+                                            format!("{}\n\nLink in bio.", p.title)
+                                        },
                                     }));
                                     content_mode.set(ContentMode::Social(channel));
                                 }

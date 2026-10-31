@@ -27,13 +27,29 @@ pub(crate) enum ContentMode {
 
 impl ContentMode {
     /// The tabs, in the top bar's order.
-    const ALL: [ContentMode; 5] = [
+    const ALL: [ContentMode; 7] = [
         ContentMode::Blog,
         ContentMode::Social(Channel::LinkedIn),
         ContentMode::Social(Channel::X),
+        ContentMode::Social(Channel::Instagram),
+        ContentMode::Social(Channel::TikTok),
         ContentMode::Board,
         ContentMode::Calendar,
     ];
+
+    /// The tabs `site` shows: no Blog or Board in a folder kept for social posts only, no
+    /// network the person hid. The calendar always, so it is never empty.
+    fn shown(site: &ProjectConfig) -> Vec<ContentMode> {
+        let networks = site.networks();
+        ContentMode::ALL
+            .into_iter()
+            .filter(|m| match m {
+                ContentMode::Blog | ContentMode::Board => site.blog,
+                ContentMode::Social(channel) => networks.contains(channel),
+                ContentMode::Calendar => true,
+            })
+            .collect()
+    }
 
     fn key(self) -> &'static str {
         match self {
@@ -58,7 +74,7 @@ impl ContentMode {
     }
 }
 
-/// A LinkedIn or X post begun from elsewhere, a blog post's Share button: the network's form
+/// A network's post begun from elsewhere, a blog post's Share button: the network's form
 /// opens filled with it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Compose {
@@ -139,12 +155,23 @@ fn SetupScreen(
     editor_mode: Signal<bool>,
 ) -> Element {
     let sites = config.read().sites();
+    let mut social_error = use_signal(String::new);
+    let social_folder = default_social_folder();
+    // A folder for social posts only, made if need be, then opened.
+    let mut start_social = move |path: std::path::PathBuf| {
+        let path = path.to_string_lossy().to_string();
+        match ProjectConfig::start_social_only(&path) {
+            Ok(()) => change_site(config, posts, selected, editor_mode, SiteChange::Open(path)),
+            Err(e) => social_error.set(format!("Couldn't make {path}: {e}")),
+        }
+    };
     rsx! {
         div { class: "setup-screen",
             div { class: "setup-card",
                 h1 { "PublishKit" }
                 p { class: "setup-subtitle",
-                    "Select your site's folder. You can configure the LLM provider afterwards."
+                    "Select your site's folder, or keep your LinkedIn, X, Instagram and TikTok posts \
+                     on their own. You can configure the LLM provider afterwards."
                 }
                 if !sites.is_empty() {
                     div { class: "setup-sites",
@@ -184,9 +211,45 @@ fn SetupScreen(
                     },
                     "Open a site's folder"
                 }
+                div { class: "setup-social",
+                    p { class: "setup-hint",
+                        "No website? Write, plan and keep your social posts in a folder of their own."
+                    }
+                    if let Some(folder) = social_folder.clone() {
+                        button {
+                            class: "btn-small",
+                            title: "Makes {folder.display()} if it isn't there",
+                            onclick: move |_| start_social(folder.clone()),
+                            "Just social posts"
+                        }
+                    }
+                    button {
+                        class: "btn-link",
+                        onclick: move |_| {
+                            spawn(async move {
+                                if let Some(folder) = rfd::AsyncFileDialog::new()
+                                    .set_title("Pick a folder for your social posts")
+                                    .pick_folder()
+                                    .await
+                                {
+                                    start_social(folder.path().to_path_buf());
+                                }
+                            });
+                        },
+                        if social_folder.is_some() { "…in another folder" } else { "Pick a folder for social posts" }
+                    }
+                    if !social_error.read().is_empty() {
+                        p { class: "status-msg", "{social_error}" }
+                    }
+                }
             }
         }
     }
+}
+
+/// Where social posts are kept when the person picks no folder: Documents/PublishKit.
+fn default_social_folder() -> Option<std::path::PathBuf> {
+    directories::UserDirs::new().and_then(|dirs| dirs.document_dir().map(|d| d.join("PublishKit")))
 }
 
 pub(crate) enum SiteChange {
@@ -335,11 +398,18 @@ fn MainLayout(
     theme: Theme,
 ) -> Element {
     let mut show_mcp = use_signal(|| false);
+    let mut show_repurpose = use_signal(|| false);
     let compose = use_signal(|| None::<Compose>);
     let pro = use_context::<desktop_kit::ui::Pro>();
     let active_lang = use_signal(String::new);
     let mut notice = use_signal(String::new);
     let site_key = config.read().project_path.clone().unwrap_or_default();
+    let site = ProjectConfig::load(&site_key);
+    let modes = ContentMode::shown(&site);
+    // The tab last open, unless this site hides it: then its first.
+    let mode = Some(*content_mode.read())
+        .filter(|m| modes.contains(m))
+        .unwrap_or(modes[0]);
     // The post list's width, dragged by its edge.
     let mut left_width =
         use_signal(|| config.peek().left_panel_width.unwrap_or(LEFT_PANEL_DEFAULT));
@@ -419,6 +489,12 @@ fn MainLayout(
                 on_mcp: move |_| show_mcp.set(true),
                 actions: rsx! {
                     button {
+                        class: "kit-btn",
+                        title: "Turn a finished video or audio recording into clips, slides, posts and a blog draft",
+                        onclick: move |_| show_repurpose.set(true),
+                        "Repurpose"
+                    }
+                    button {
                         class: "kit-btn kit-icon",
                         title: "Read the posts from disk again",
                         onclick: move |_| {
@@ -428,34 +504,36 @@ fn MainLayout(
                         "↻"
                     }
                     {
-                        let p = config.read().project_path.clone().unwrap_or_default();
-                        let command = ProjectConfig::load(&p).deploy_command;
+                        let command = site.deploy_command.clone();
+                        // A folder of social posts only has no site to put online.
                         rsx! {
-                            button {
-                                class: "kit-btn kit-deploy",
-                                disabled: deploying(),
-                                title: if command.is_empty() { "Set the command that puts your site online in Settings".to_string() } else { format!("Runs {command}") },
-                                onclick: move |_| {
-                                    let project = config.read().project_path.clone().unwrap_or_default();
-                                    let pcfg = ProjectConfig::load(&project);
-                                    if pcfg.deploy_command.trim().is_empty() {
-                                        notice.set("Set the command that puts your site online in Settings → After publishing / Deploy.".to_string());
-                                        show_settings.set(true);
-                                        return;
-                                    }
-                                    deploying.set(true);
-                                    notice.set(format!("Deploying with {}…", pcfg.deploy_command));
-                                    spawn(async move {
-                                        let run = tokio::task::spawn_blocking(move || api::deploy(&project, &pcfg)).await.ok().flatten();
-                                        notice.set(match run {
-                                            Some(run) if run.ok => format!("Deployed: {} ran.", run.command),
-                                            Some(run) => format!("The deploy failed: {}", run.output),
-                                            None => String::new(),
+                            if site.blog {
+                                button {
+                                    class: "kit-btn kit-deploy",
+                                    disabled: deploying(),
+                                    title: if command.is_empty() { "Set the command that puts your site online in Settings".to_string() } else { format!("Runs {command}") },
+                                    onclick: move |_| {
+                                        let project = config.read().project_path.clone().unwrap_or_default();
+                                        let pcfg = ProjectConfig::load(&project);
+                                        if pcfg.deploy_command.trim().is_empty() {
+                                            notice.set("Set the command that puts your site online in Settings → After publishing / Deploy.".to_string());
+                                            show_settings.set(true);
+                                            return;
+                                        }
+                                        deploying.set(true);
+                                        notice.set(format!("Deploying with {}…", pcfg.deploy_command));
+                                        spawn(async move {
+                                            let run = tokio::task::spawn_blocking(move || api::deploy(&project, &pcfg)).await.ok().flatten();
+                                            notice.set(match run {
+                                                Some(run) if run.ok => format!("Deployed: {} ran.", run.command),
+                                                Some(run) => format!("The deploy failed: {}", run.output),
+                                                None => String::new(),
+                                            });
+                                            deploying.set(false);
                                         });
-                                        deploying.set(false);
-                                    });
-                                },
-                                if deploying() { "Deploying…" } else { "Deploy" }
+                                    },
+                                    if deploying() { "Deploying…" } else { "Deploy" }
+                                }
                             }
                         }
                     }
@@ -464,10 +542,8 @@ fn MainLayout(
                 pro: rsx! { desktop_kit::ui::ProButton { pro, hint: crate::pro::HINT } },
                 SiteSwitcher { config, posts, selected, editor_mode, active_lang, notice }
                 {
-                    let p = config.read().project_path.clone().unwrap_or_default();
-                    let site = ProjectConfig::load(&p);
                     rsx! {
-                        if let Some(preset) = site.preset {
+                        if let Some(preset) = site.preset.filter(|_| site.blog) {
                             button {
                                 class: "kit-btn kit-icon",
                                 title: "Read as {preset.label()} — change it in Settings",
@@ -481,12 +557,12 @@ fn MainLayout(
                     }
                 }
                 div { class: "kit-tabs",
-                    for mode in ContentMode::ALL {
+                    for tab in modes {
                         button {
-                            key: "{mode.key()}",
-                            class: if *content_mode.read() == mode { "kit-tab kit-on" } else { "kit-tab" },
-                            onclick: move |_| *content_mode.write() = mode,
-                            "{mode.label()}"
+                            key: "{tab.key()}",
+                            class: if mode == tab { "kit-tab kit-on" } else { "kit-tab" },
+                            onclick: move |_| *content_mode.write() = tab,
+                            "{tab.label()}"
                         }
                     }
                 }
@@ -504,7 +580,7 @@ fn MainLayout(
                 },
                 onmouseup: move |_| stop_resizing(),
                 onmouseleave: move |_| stop_resizing(),
-                match *content_mode.read() {
+                match mode {
                     ContentMode::Blog => rsx! {
                         // Made anew for each site: no search or half-written post carries over.
                         // (A key counts only on a block's first node, hence the fragment.)
@@ -539,6 +615,9 @@ fn MainLayout(
             }
             if show_mcp() {
                 crate::mcp::McpModal { show: show_mcp }
+            }
+            if show_repurpose() {
+                crate::repurpose::RepurposeModal { show: show_repurpose, config, posts, notice }
             }
         }
     }
