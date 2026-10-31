@@ -14,18 +14,78 @@ enum Outcome {
     Failed(String),
 }
 
+/// A recording another Mayorana app sent here (PolishCast's "Send to PublishKit"): a note in
+/// the folder they share, beside the licence, read once and removed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Handoff {
+    pub media: PathBuf,
+    pub transcript: Option<PathBuf>,
+    pub title: String,
+}
+
+/// Older than this, a note was left by a run that never got here, and isn't acted on.
+const HANDOFF_MAX_AGE_SECS: u64 = 3600;
+
+fn handoff_path() -> Option<PathBuf> {
+    Some(
+        dirs::config_dir()?
+            .join("mayorana")
+            .join("handoff")
+            .join("publishkit-repurpose.json"),
+    )
+}
+
+/// The recording sent here since the last look, if any.
+pub fn take_handoff() -> Option<Handoff> {
+    let path = handoff_path()?;
+    let text = std::fs::read_to_string(&path).ok()?;
+    let _ = std::fs::remove_file(&path);
+    handoff_from(&text, std::time::SystemTime::now())
+}
+
+pub(super) fn handoff_from(text: &str, now: std::time::SystemTime) -> Option<Handoff> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    let now = now.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+    if now.saturating_sub(v["at"].as_u64().unwrap_or(0)) > HANDOFF_MAX_AGE_SECS {
+        return None;
+    }
+    let media = PathBuf::from(v["media"].as_str()?);
+    if !media.is_absolute() || !is_media(&media) {
+        return None;
+    }
+    let transcript = v["transcript"]
+        .as_str()
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute());
+    Some(Handoff {
+        media,
+        transcript,
+        title: v["title"].as_str().unwrap_or("").to_string(),
+    })
+}
+
 #[component]
 pub fn RepurposeModal(
     show: Signal<bool>,
     config: Signal<AppConfig>,
     posts: Signal<ProjectPosts>,
     notice: Signal<String>,
+    /// What another app sent, to start from.
+    handoff: Option<Handoff>,
 ) -> Element {
+    let sent = handoff.clone();
     let project = config.read().project_path.clone().unwrap_or_default();
     let site = ProjectConfig::load(&project);
     let languages = site.languages();
-    let mut media = use_signal(|| None::<PathBuf>);
-    let mut transcript_file = use_signal(|| None::<PathBuf>);
+    let mut media = use_signal({
+        let sent = sent.clone();
+        move || sent.map(|h| h.media)
+    });
+    let mut transcript_file = use_signal({
+        let sent = sent.clone();
+        move || sent.and_then(|h| h.transcript.or_else(|| sidecar(&h.media)))
+    });
+    let title = sent.map(|h| h.title).unwrap_or_default();
     let mut pasted = use_signal(String::new);
     let mut lang = use_signal({
         let first = languages.first().cloned().unwrap_or_default();
@@ -228,9 +288,11 @@ pub fn RepurposeModal(
                         onclick: {
                             let project = project.clone();
                             let networks = networks.clone();
+                            let title = title.clone();
                             move |_| {
                                 let project = project.clone();
                                 let networks = networks.clone();
+                                let title = title.clone();
                                 let Some(media) = media.read().clone() else {
                                     return;
                                 };
@@ -241,7 +303,7 @@ pub fn RepurposeModal(
                                 running.set(true);
                                 outcome.set(None);
                                 spawn(async move {
-                                    let result = run(&project, media, transcript, text, language, count, kind, networks).await;
+                                    let result = run(&project, media, transcript, text, language, title, count, kind, networks).await;
                                     running.set(false);
                                     match result {
                                         Ok((saved, notes)) => {
@@ -269,6 +331,7 @@ async fn run(
     transcript_file: Option<PathBuf>,
     pasted: String,
     lang: String,
+    title: String,
     clips: usize,
     blog: BlogKind,
     networks: Vec<Channel>,
@@ -287,7 +350,7 @@ async fn run(
         media,
         transcript,
         lang,
-        title: String::new(),
+        title,
         clips,
         blog,
         networks,

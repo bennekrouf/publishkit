@@ -48,6 +48,8 @@ user sees in the update prompt should all be accounted for.
   repurposed draft shows the recording it came from, the clip's times and
   the carousel's slides, ready to copy. Claude can repurpose a recording
   too.
+- A video sent from PolishCast opens Repurpose by itself, with the recording
+  and its captions already filled in.
 
 ### Changed
 
