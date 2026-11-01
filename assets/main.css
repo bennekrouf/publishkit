@@ -2,27 +2,27 @@
 
 /* ══════════════════════════════════════════════
    CSS VARIABLES — dark (default) / light
-   Shares the deep-violet system used by ais-runner.
+   Warm amber, taken from the app icon (#f5a524 → #9a4a0a, #fff4e3 glow).
 ══════════════════════════════════════════════ */
 :root {
-  --bg0:        #140a1a;
-  --bg1:        #1f1530;
-  --bg2:        #2d1f42;
-  --bg3:        #271a3a;
-  --border:     #3d2f52;
-  --border2:    #2d1f42;
-  --text1:      #e6d4f5;
-  --text2:      #a88fb8;
-  --text3:      #7d6d8a;
+  --bg0:        #140d07;
+  --bg1:        #1f150c;
+  --bg2:        #2e2013;
+  --bg3:        #271b10;
+  --border:     #45301c;
+  --border2:    #2e2013;
+  --text1:      #f6e8d6;
+  --text2:      #c0a283;
+  --text3:      #8f7860;
   --green:      #52d97c;
   --green-bg:   #2a9d52;
-  --red:        #ff6b8a;
-  --red-bg:     #c93a5a;
-  --blue:       #9d7aff;
-  --blue-bg:    #6b3fb8;
-  --blue-dark:  #2f2050;
-  --accent:     #9d7aff;
-  --yellow:     #e0b040;
+  --red:        #f2606e;
+  --red-bg:     #c0394a;
+  --blue:       #f5a524;
+  --blue-bg:    #b0600f;
+  --blue-dark:  #3a2512;
+  --accent:     #f5a524;
+  --yellow:     #e8cc55;
   --orange:     #e08a4a;
   --mono: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
 
@@ -61,24 +61,24 @@ body {
 /* Light palette: on while body has `light`, which the header's theme toggle
    (desktop-kit) sets from the OS setting until the person picks one. */
 body.light {
-  --bg0:        #faf7ff;
-  --bg1:        #f1ebf9;
-  --bg2:        #e7ddf3;
-  --bg3:        #dcceec;
-  --border:     #cbb9e0;
-  --border2:    #e7ddf3;
-  --text1:      #33244a;
-  --text2:      #574473;
-  --text3:      #8b7aa3;
+  --bg0:        #fffaf3;
+  --bg1:        #fbf1e3;
+  --bg2:        #f4e4cf;
+  --bg3:        #ecd6bb;
+  --border:     #e0c6a4;
+  --border2:    #f4e4cf;
+  --text1:      #3a2410;
+  --text2:      #5e4128;
+  --text3:      #8f7258;
   --green:      #1f7a45;
   --green-bg:   #1b6d3d;
-  --red:        #c02f52;
-  --red-bg:     #a82846;
-  --blue:       #6b3fb8;
-  --blue-bg:    #5c34a0;
-  --blue-dark:  #e6dcf7;
-  --accent:     #6b3fb8;
-  --yellow:     #96700f;
+  --red:        #b8323f;
+  --red-bg:     #a32a37;
+  --blue:       #9a4a0a;
+  --blue-bg:    #a8540e;
+  --blue-dark:  #f8e1c0;
+  --accent:     #9a4a0a;
+  --yellow:     #8a6d08;
   --orange:     #b5602a;
 }
 
@@ -244,7 +244,7 @@ a.btn-small { text-decoration: none; }
   padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
 }
 .status-badge.published { background: var(--green-bg); color: #fff; }
-.status-badge.draft     { background: var(--yellow); color: #140a1a; }
+.status-badge.draft     { background: var(--yellow); color: var(--bg0); }
 
 .preview-empty {
   display: flex; align-items: center; justify-content: center;
