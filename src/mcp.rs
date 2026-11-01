@@ -13,10 +13,10 @@ use crate::api;
 use crate::frontmatter;
 use crate::plan::{self, Stage};
 use crate::state::{load_posts, AppConfig, Channel, Post, ProjectConfig, SocialPost, SocialPosts};
+use desktop_kit::mcp::Server;
 use dioxus::prelude::*;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 mod modal;
 pub use modal::*;
 mod tools;
@@ -25,10 +25,6 @@ mod posts;
 use posts::*;
 mod repurpose;
 use repurpose::*;
-
-/// The newest protocol revision this server speaks. A client asking for an older one gets its
-/// own back; everything used here exists in all of them.
-const PROTOCOL: &str = "2025-06-18";
 
 const INSTRUCTIONS: &str = "PublishKit manages a website's blog as markdown files: drafts wait, per language, \
 until they are published; LinkedIn, X, Instagram and TikTok posts are kept the same way, each on its own, not \
@@ -41,6 +37,15 @@ browser with their yes. Ask the user before publishing, scheduling or deleting. 
 Before calling these tools, read the publishkit skill if one is available: it has the confirmation \
 rules, defaults and report layouts that these instructions leave out.";
 
+/// What the client is told: the plumbing is desktop-kit's, the tools are below.
+const SERVER: Server = Server {
+    name: "publishkit",
+    version: env!("CARGO_PKG_VERSION"),
+    instructions: INSTRUCTIONS,
+    tools,
+    library: true,
+};
+
 pub fn serve() {
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -52,109 +57,7 @@ pub fn serve() {
             std::process::exit(1);
         }
     };
-    runtime.block_on(async {
-        let mut lines = BufReader::new(tokio::io::stdin()).lines();
-        let mut stdout = tokio::io::stdout();
-        while let Ok(Some(line)) = lines.next_line().await {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let Ok(message) = serde_json::from_str::<Value>(&line) else {
-                write(&mut stdout, &error(Value::Null, -32700, "not JSON")).await;
-                continue;
-            };
-            // A notification (no id) asks for nothing back.
-            let Some(id) = message.get("id").cloned() else {
-                continue;
-            };
-            let reply = handle(id, &message).await;
-            write(&mut stdout, &reply).await;
-        }
-    });
-}
-
-async fn handle(id: Value, message: &Value) -> Value {
-    let method = message["method"].as_str().unwrap_or("");
-    let params = &message["params"];
-    match method {
-        "initialize" => {
-            let asked = params["protocolVersion"].as_str().unwrap_or(PROTOCOL);
-            let version = if asked <= PROTOCOL { asked } else { PROTOCOL };
-            result(
-                id,
-                json!({
-                    "protocolVersion": version,
-                    "capabilities": { "tools": {} },
-                    "serverInfo": { "name": "publishkit", "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": format!("{INSTRUCTIONS} {}", desktop_kit::library::mcp::INSTRUCTIONS),
-                }),
-            )
-        }
-        "ping" => result(id, json!({})),
-        "tools/list" => result(id, json!({ "tools": with_library(tools()) })),
-        "tools/call" => {
-            let name = params["name"].as_str().unwrap_or("");
-            let args = &params["arguments"];
-            let answer = match desktop_kit::library::mcp::call(name, args) {
-                Some(answer) => answer,
-                None => call(name, args).await,
-            };
-            let (text, is_error) = match answer {
-                Ok(value) => (pretty(&value), false),
-                Err(why) => (why, true),
-            };
-            result(
-                id,
-                json!({ "content": [{ "type": "text", "text": text }], "isError": is_error }),
-            )
-        }
-        _ => error(id, -32601, &format!("no method {method}")),
-    }
-}
-
-/// The app's tools, then the media library's, which every Mayorana app serves alike.
-fn with_library(mut tools: Value) -> Value {
-    if let Some(list) = tools.as_array_mut() {
-        list.extend(desktop_kit::library::mcp::tools());
-    }
-    tools
-}
-
-async fn write(stdout: &mut tokio::io::Stdout, reply: &Value) {
-    // One message per line, and nothing else ever on stdout: the client reads it as the
-    // protocol, so a stray print is a corrupt message.
-    let mut bytes = serde_json::to_vec(reply).unwrap_or_default();
-    bytes.push(b'\n');
-    let _ = stdout.write_all(&bytes).await;
-    let _ = stdout.flush().await;
-}
-
-fn result(id: Value, result: Value) -> Value {
-    json!({ "jsonrpc": "2.0", "id": id, "result": result })
-}
-
-fn error(id: Value, code: i64, message: &str) -> Value {
-    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
-}
-
-/// A tool result as the client reads it: compact, with no null fields. It
-/// stays in the client's context for the rest of the conversation, so every
-/// byte here is paid for again on each later turn.
-fn pretty(value: &Value) -> String {
-    serde_json::to_string(&without_nulls(value.clone())).unwrap_or_default()
-}
-
-fn without_nulls(value: Value) -> Value {
-    match value {
-        Value::Object(map) => Value::Object(
-            map.into_iter()
-                .filter(|(_, v)| !v.is_null())
-                .map(|(k, v)| (k, without_nulls(v)))
-                .collect(),
-        ),
-        Value::Array(items) => Value::Array(items.into_iter().map(without_nulls).collect()),
-        other => other,
-    }
+    runtime.block_on(SERVER.serve_async(|c| async move { call(&c.name, &c.args).await }));
 }
 
 // ── Tool definitions ─────────────────────────────────────────────────────────────────────
