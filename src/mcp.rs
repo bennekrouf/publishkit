@@ -32,25 +32,12 @@ const PROTOCOL: &str = "2025-06-18";
 
 const INSTRUCTIONS: &str = "PublishKit manages a website's blog as markdown files: drafts wait, per language, \
 until they are published; LinkedIn, X, Instagram and TikTok posts are kept the same way, each on its own, not \
-tied to a blog post. Some folders are kept for social posts only: project says so (blog: false), and has no \
-blog to write for. Start with project, which gives the site, the framework it is built with, its languages and \
-how many posts each has; tools default to the project open in PublishKit. list_posts and get_post read posts \
-(kind blog, linkedin, x, instagram or tiktok). queue_post adds a blog draft: write its body yourself in the \
-site's voice (project gives the site's own writing brief), or pass generate: true to have PublishKit's \
-configured model write it. queue_linkedin, queue_x, queue_instagram and queue_tiktok add a post for that \
-network: the user usually writes these, so save the text they give as it is, and write or generate one only \
-when asked; with published_at it is saved as already posted. An Instagram or TikTok post is a caption under \
-photos or a video, and its links can't be clicked; Instagram takes at most 5 hashtags. update_post edits a draft; set_social sets the older \
-LinkedIn and X teasers kept with a blog post. publish_post makes a draft live: it is dated today (or \
-published_at, for a post that went out earlier) and the site's publish command, if it has one, runs, so ask \
-the user before publishing, and before delete_post. schedule_post sets a draft's stage (idea, draft, review) and \
-the date and time it is published by itself; ask the user before scheduling. A network's post can carry images \
-or one video (an Instagram carousel mixes both): media (file paths) on its queue tool or update_post, posted \
-posts included. PublishKit never posts to a network itself: such a draft's schedule is a reminder on the \
-calendar. post_now gives what posting a draft takes (the network's page, the text, the files to attach), \
-for posting it in the user's browser with their yes; publish_post with the post's url then records it. set_date changes the date and time of a post, published ones included. repurpose turns a \
-finished recording (a PolishCast video or a TrackCut audio file) and its transcript into drafts at once: clips \
-to cut with their times, a carousel's slides, a post per network and a blog draft. \
+tied to a blog post. Some folders are kept for social posts only: project says so (blog: false). Start with \
+project, which gives the site, its languages and its writing brief. Every tool takes an optional project, the \
+absolute path of the site's folder, defaulting to the one open in PublishKit; lang is a language code project \
+lists; filename is the post's file name as list_posts gives it (my-post.md, my-post.mdx, or my-post/index.md). \
+PublishKit never posts to a network itself: post_now gives what posting takes, for posting in the user's \
+browser with their yes. Ask the user before publishing, scheduling or deleting. \
 Before calling these tools, read the publishkit skill if one is available: it has the confirmation \
 rules, defaults and report layouts that these instructions leave out.";
 

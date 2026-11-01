@@ -3,9 +3,10 @@
 use super::*;
 
 pub(super) fn tools() -> Value {
-    let project = json!({ "type": "string", "description": "Absolute path of the site's folder. Defaults to the one open in PublishKit." });
-    let lang = json!({ "type": "string", "description": "Language code, e.g. fr or en (project lists them)." });
-    let filename = json!({ "type": "string", "description": "The post's file name as list_posts gives it: my-post.md, my-post.mdx, or my-post/index.md for a page bundle." });
+    // What project, lang and filename mean is said once, in the instructions, not in every tool.
+    let project = json!({ "type": "string" });
+    let lang = json!({ "type": "string" });
+    let filename = json!({ "type": "string" });
     let kind = json!({ "type": "string", "enum": ["blog", "linkedin", "x", "instagram", "tiktok"], "description": "Default blog." });
     let place = json!({ "type": "string", "enum": ["queue", "published"], "description": "Default queue." });
     let media = json!({ "type": "array", "items": { "type": "string" }, "description": "A LinkedIn, X, \
@@ -64,8 +65,8 @@ pub(super) fn tools() -> Value {
             "name": "queue_post",
             "description": "Adds a blog draft to a language's queue, with the site's author and default tags. When \
                             project says title_heading, the file starts with the title as a heading, so don't repeat \
-                            it in the body. Give body, or \
-                            generate: true to have PublishKit's model write it from the title and summary. social \
+                            it in the body. Give body, written in the site's voice (project gives its \
+                            writing brief), or generate: true to have PublishKit's model write it from the title and summary. social \
                             adds the teasers; generate_social has PublishKit's model write them.",
             "inputSchema": {
                 "type": "object",
@@ -262,7 +263,8 @@ fn social_tool(channel: Channel, project: &Value, lang: &Value, media: &Value) -
     json!({
         "name": format!("queue_{}", channel.key()),
         "description": format!("Adds a {label} post to a language's queue, on its own, not tied to a blog post. \
-                        Give body, the text as the user wrote it or as you wrote it with them; or generate: true \
+                        Give body, the text as the user wrote it or as you wrote it with them (the user \
+                        usually writes these: save their text as it is); or, only when asked, generate: true \
                         with a topic, an angle and, if it links somewhere, a link to have PublishKit's model \
                         write it. {link_rule} topic names it in the list; without one, its first line does. For a post already on {label}, give \
                         published_at and it is saved as posted on that date. media attaches its images or \

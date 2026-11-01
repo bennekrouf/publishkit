@@ -49,6 +49,13 @@ user sees in the update prompt should all be accounted for.
   the text and attaches the files, then waits for your yes before posting,
   and records the post with its address.
 
+### Changed
+
+- Using PublishKit from Claude, Codex or another agent takes less of the agent's
+  context on every message, including ones that have nothing to do with
+  PublishKit: its instructions are a few lines, and what a setting every tool
+  takes means is said once rather than in each tool.
+
 ## [0.1.42] - 2026-10-31
 
 ### Added
