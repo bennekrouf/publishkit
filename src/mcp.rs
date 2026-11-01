@@ -159,6 +159,22 @@ fn without_nulls(value: Value) -> Value {
 // ── Tool definitions ─────────────────────────────────────────────────────────────────────
 
 async fn call(name: &str, args: &Value) -> Result<Value, String> {
+    let result = run(name, args).await;
+    // What changed shows in PolishCast's and TrackCut's library and calendar, even with
+    // PublishKit's window closed.
+    let reads = matches!(name, "project" | "list_posts" | "get_post");
+    if result.is_ok() && !reads {
+        if let Ok(project) = project_path(args) {
+            let _ = tokio::task::spawn_blocking(move || {
+                crate::library::sync(&project, &crate::state::load_posts(&project))
+            })
+            .await;
+        }
+    }
+    result
+}
+
+async fn run(name: &str, args: &Value) -> Result<Value, String> {
     match name {
         "project" => project_info(args),
         "list_posts" => list_posts(args),

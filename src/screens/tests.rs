@@ -86,6 +86,7 @@ fn a_folder_of_social_posts_only_shows_no_blog_and_hides_what_was_unticked() {
             ContentMode::Social(Channel::Instagram),
             ContentMode::Social(Channel::TikTok),
             ContentMode::Calendar,
+            ContentMode::Library,
         ]
     );
     assert_eq!(

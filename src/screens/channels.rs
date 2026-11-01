@@ -579,6 +579,7 @@ fn change_media(
 ) {
     match api::set_media(&post.path, post.channel, sources) {
         Ok(_) => {
+            crate::library::attached(&post.path, post.channel, sources);
             error.set(String::new());
             reselect(
                 &post.path,

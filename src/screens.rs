@@ -23,11 +23,13 @@ pub(crate) enum ContentMode {
     Social(Channel),
     Board,
     Calendar,
+    /// The media library every Mayorana app shares.
+    Library,
 }
 
 impl ContentMode {
     /// The tabs, in the top bar's order.
-    const ALL: [ContentMode; 7] = [
+    const ALL: [ContentMode; 8] = [
         ContentMode::Blog,
         ContentMode::Social(Channel::LinkedIn),
         ContentMode::Social(Channel::X),
@@ -35,6 +37,7 @@ impl ContentMode {
         ContentMode::Social(Channel::TikTok),
         ContentMode::Board,
         ContentMode::Calendar,
+        ContentMode::Library,
     ];
 
     /// The tabs `site` shows: no Blog or Board in a folder kept for social posts only, no
@@ -46,7 +49,7 @@ impl ContentMode {
             .filter(|m| match m {
                 ContentMode::Blog | ContentMode::Board => site.blog,
                 ContentMode::Social(channel) => networks.contains(channel),
-                ContentMode::Calendar => true,
+                ContentMode::Calendar | ContentMode::Library => true,
             })
             .collect()
     }
@@ -57,6 +60,7 @@ impl ContentMode {
             ContentMode::Social(channel) => channel.key(),
             ContentMode::Board => "board",
             ContentMode::Calendar => "calendar",
+            ContentMode::Library => "library",
         }
     }
 
@@ -66,6 +70,7 @@ impl ContentMode {
             ContentMode::Social(channel) => channel.label(),
             ContentMode::Board => "Board",
             ContentMode::Calendar => "Calendar",
+            ContentMode::Library => "Library",
         }
     }
 
@@ -405,6 +410,26 @@ fn MainLayout(
     let pro = use_context::<desktop_kit::ui::Pro>();
     let active_lang = use_signal(String::new);
     let mut notice = use_signal(String::new);
+    // The media library every Mayorana app shares, and a post opened from it, here or from
+    // PolishCast or TrackCut.
+    let library = desktop_kit::ui::use_library();
+    let open_target = move |target: String| {
+        let found = crate::views::open_post_at(
+            &target,
+            posts,
+            selected,
+            editor_mode,
+            content_mode,
+            active_lang,
+            social_selected,
+        );
+        if !found {
+            let mut notice = notice;
+            notice.set(format!(
+                "{target} isn't among this site's posts: open its site first."
+            ));
+        }
+    };
     let site_key = config.read().project_path.clone().unwrap_or_default();
     let site = ProjectConfig::load(&site_key);
     let modes = ContentMode::shown(&site);
@@ -486,9 +511,26 @@ fn MainLayout(
                     show_repurpose.set(true);
                 }
             }
+            if let Some(note) =
+                tokio::task::spawn_blocking(|| desktop_kit::handoff::take("publishkit", "open"))
+                    .await
+                    .ok()
+                    .flatten()
+            {
+                if let Some(target) = note["open"].as_str() {
+                    open_target(target.to_string());
+                }
+            }
+            let changed = last.as_ref().is_none_or(|l| *l != stamp);
             if last.as_ref().is_some_and(|l| *l != stamp) {
                 let mut posts = posts;
                 posts.set(load_posts(&project));
+            }
+            // The posts in the library the other apps read, whenever they change.
+            if changed {
+                let all = posts.peek().clone();
+                let _ =
+                    tokio::task::spawn_blocking(move || crate::library::sync(&project, &all)).await;
             }
             last = Some(stamp);
         }
@@ -610,7 +652,12 @@ fn MainLayout(
                         crate::views::Board { config, posts, selected, editor_mode, content_mode, active_lang, notice }
                     },
                     ContentMode::Calendar => rsx! {
-                        crate::views::Calendar { posts, selected, editor_mode, content_mode, active_lang, social_selected }
+                        crate::views::Calendar { posts, selected, editor_mode, content_mode, active_lang, social_selected, library }
+                    },
+                    ContentMode::Library => rsx! {
+                        div { class: "library-pane",
+                            desktop_kit::ui::LibraryView { here: "publishkit", items: library, on_open: open_target }
+                        }
                     },
                     ContentMode::Social(channel) => rsx! {
                         // Made anew per network and site: X's form never shows LinkedIn's text.

@@ -206,6 +206,7 @@ pub(super) fn update_post(args: &Value) -> Result<Value, String> {
     let mut v = json!({ "updated": path });
     if let (Some(sources), Some(channel)) = (media, channel) {
         v["media"] = json!(api::set_media(&path, channel, &sources).map_err(|e| format!("{e:#}"))?);
+        crate::library::attached(&path, channel, &sources);
     }
     v["words"] = json!(words(&std::fs::read_to_string(&path).unwrap_or_default()));
     Ok(v)
@@ -496,7 +497,10 @@ pub(super) async fn queue_social(args: &Value, channel: Channel) -> Result<Value
     let path = api::save_social_to_queue(&project, &cfg, channel, &topic, &lang, &body)
         .map_err(|e| format!("{e:#}"))?;
     let attached = match api::set_media(Path::new(&path), channel, &sources) {
-        Ok(names) => names,
+        Ok(names) => {
+            crate::library::attached(Path::new(&path), channel, &sources);
+            names
+        }
         Err(e) => {
             // Nothing half-saved: the draft goes with the media it couldn't take.
             let _ = std::fs::remove_file(&path);

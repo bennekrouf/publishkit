@@ -5,6 +5,7 @@ mod crosspost;
 mod editor;
 mod frontmatter;
 mod kit;
+mod library;
 mod mcp;
 mod plan;
 mod pro;

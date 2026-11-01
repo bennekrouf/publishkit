@@ -15,6 +15,23 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- Library tab: every video, audio recording and picture from PolishCast and
+  TrackCut, with your posts, in one searchable list shared by all three apps.
+  Each shows where it stands (recording, polishing, ready, queued, posted or
+  published), its files and the drafts it went into. Set a status or tags by
+  hand, play a file, show it in its folder, or open it in the app that made
+  it. Drop videos, audio or pictures on the list to add them; they stay where
+  they are, nothing is copied.
+- The calendar also shows PolishCast takes and TrackCut recordings on the day
+  they last moved, coloured by where they stand. A click opens them in their
+  app.
+- A video attached to a draft shows as queued in the library, and as posted
+  once its post goes out, in PolishCast and TrackCut too.
+
 ## [0.1.42] - 2026-10-31
 
 ### Added

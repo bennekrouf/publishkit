@@ -27,6 +27,68 @@ fn open(
     content_mode.set(ContentMode::Blog);
 }
 
+/// Opens the post whose file is `target`, in the tab that shows it; a draft published since
+/// is found by its name. `false` when this site has no such post.
+pub(crate) fn open_post_at(
+    target: &str,
+    posts: Signal<ProjectPosts>,
+    selected: Signal<Option<Post>>,
+    editor_mode: Signal<bool>,
+    mut content_mode: Signal<ContentMode>,
+    active_lang: Signal<String>,
+    mut social_selected: Signal<Option<SocialPost>>,
+) -> bool {
+    let path = std::path::Path::new(target);
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+    let all = posts.peek().clone();
+    let blog: Vec<Post> = all
+        .languages
+        .iter()
+        .flat_map(|l| {
+            let shelf = all.blog(l);
+            shelf.queue.into_iter().chain(shelf.published)
+        })
+        .collect();
+    let social: Vec<SocialPost> = all
+        .languages
+        .iter()
+        .flat_map(|l| Channel::ALL.into_iter().map(move |c| (c, l)))
+        .flat_map(|(c, l)| {
+            let shelf = all.social(c, l);
+            shelf.queue.into_iter().chain(shelf.published)
+        })
+        .collect();
+    let blog_post = blog
+        .iter()
+        .find(|p| p.path == path)
+        .or_else(|| blog.iter().find(|p| Some(&p.filename) == name.as_ref()));
+    if let Some(post) = blog_post {
+        open(
+            post.clone(),
+            selected,
+            editor_mode,
+            content_mode,
+            active_lang,
+        );
+        return true;
+    }
+    let social_post = social.iter().find(|p| p.path == path).or_else(|| {
+        social.iter().find(|p| {
+            Some(&p.filename) == name.as_ref()
+                && path.parent().and_then(|d| d.parent())
+                    == p.path.parent().and_then(|d| d.parent())
+        })
+    });
+    match social_post {
+        Some(post) => {
+            content_mode.set(ContentMode::Social(post.channel));
+            social_selected.set(Some(post.clone()));
+            true
+        }
+        None => false,
+    }
+}
+
 #[component]
 pub fn Board(
     config: Signal<AppConfig>,
@@ -230,6 +292,8 @@ fn BoardCard(
 enum Item {
     Blog(Post),
     Social(SocialPost),
+    /// A recording from PolishCast or TrackCut, or a file added to the library by hand.
+    Media(desktop_kit::library::Item),
 }
 
 impl Item {
@@ -237,6 +301,7 @@ impl Item {
         match self {
             Item::Blog(p) => &p.title,
             Item::Social(p) => &p.topic,
+            Item::Media(i) => &i.title,
         }
     }
 
@@ -244,6 +309,7 @@ impl Item {
         match self {
             Item::Blog(p) => &p.lang,
             Item::Social(p) => &p.lang,
+            Item::Media(_) => "",
         }
     }
 }
@@ -259,8 +325,11 @@ pub fn Calendar(
     content_mode: Signal<ContentMode>,
     active_lang: Signal<String>,
     social_selected: Signal<Option<SocialPost>>,
+    /// The shared library: PolishCast's and TrackCut's recordings show on their days too.
+    library: Signal<Vec<desktop_kit::library::Item>>,
 ) -> Element {
     let today = chrono::Local::now().date_naive();
+    let mut media_error = use_signal(|| None::<String>);
     let mut month = use_signal(|| (today.year(), today.month()));
     let (year, number) = month();
     let first = NaiveDate::from_ymd_opt(year, number, 1).unwrap_or(today);
@@ -306,6 +375,11 @@ pub fn Calendar(
             }
         }
     }
+    for item in crate::library::calendar_media(&library.read()) {
+        if let Some(when) = plan::When::parse(&item.date) {
+            add(Some(when), Item::Media(item), false);
+        }
+    }
     // Through the day: untimed posts first, then by time.
     for items in by_day.values_mut() {
         items.sort_by_key(|(time, _, _)| *time);
@@ -318,13 +392,17 @@ pub fn Calendar(
     };
 
     rsx! {
+        style { {desktop_kit::ui::LIBRARY_STYLE} }
         div { class: "calendar",
             div { class: "calendar-bar",
                 button { class: "btn-small", onclick: move |_| step(-1), "‹" }
                 span { class: "calendar-title", "{first.format(\"%B %Y\")}" }
                 button { class: "btn-small", onclick: move |_| step(1), "›" }
                 button { class: "btn-small", onclick: move |_| month.set((today.year(), today.month())), "Today" }
-                span { class: "settings-hint", "Blog and social posts on the day they went out; ⏱ scheduled drafts on the day they go out." }
+                span { class: "settings-hint", "Blog and social posts on the day they went out; ⏱ scheduled drafts on the day they go out; recordings from PolishCast and TrackCut on the day they last changed, coloured by where they stand." }
+            }
+            if let Some(e) = media_error() {
+                p { class: "repurpose-error calendar-error", "{e}" }
             }
             div { class: "calendar-head",
                 for name in WEEKDAYS {
@@ -351,23 +429,36 @@ pub fn Calendar(
                                         let time = time.map(|t| t.format("%H:%M ").to_string()).unwrap_or_default();
                                         let network = match &item {
                                             Item::Social(p) => Some(p.channel),
-                                            Item::Blog(_) => None,
+                                            Item::Blog(_) | Item::Media(_) => None,
+                                        };
+                                        let media = match &item {
+                                            Item::Media(i) => Some(i.clone()),
+                                            _ => None,
                                         };
                                         let class = format!(
-                                            "calendar-item{}{}",
+                                            "calendar-item{}{}{}",
                                             if scheduled { " scheduled" } else { "" },
-                                            network.map(|c| format!(" {}", c.key())).unwrap_or_default()
+                                            network.map(|c| format!(" {}", c.key())).unwrap_or_default(),
+                                            media.as_ref().map(|i| format!(" media kit-status-{}", i.status.key())).unwrap_or_default()
                                         );
                                         let title = item.title().to_string();
                                         let carries = match &item {
                                             Item::Social(p) => crate::screens::media_label(&p.media),
-                                            Item::Blog(_) => None,
+                                            Item::Blog(_) | Item::Media(_) => None,
                                         };
-                                        let tip = match (scheduled, network) {
+                                        let tip = match (&media, scheduled, network) {
+                                            (Some(i), _, _) => format!(
+                                                "{} in {}, {}: {title}",
+                                                i.kind.label(),
+                                                desktop_kit::launch::name(&i.app),
+                                                i.status.label().to_lowercase()
+                                            ),
+                                            (None, scheduled, network) => match (scheduled, network) {
                                             (true, Some(c)) => format!("{}, planned: {title}", c.label()),
                                             (true, None) => format!("Scheduled: {title}"),
                                             (false, Some(c)) => format!("Posted on {}: {title}", c.label()),
                                             (false, None) => format!("Published: {title}"),
+                                            },
                                         };
                                         let tip = match &carries {
                                             Some(label) => format!("{tip} ({label})"),
@@ -384,6 +475,14 @@ pub fn Calendar(
                                                         let mut content_mode = content_mode;
                                                         content_mode.set(ContentMode::Social(post.channel));
                                                         social_selected.set(Some(post));
+                                                    }
+                                                    Item::Media(i) => {
+                                                        let opened = if i.app == "library" || i.open.is_empty() {
+                                                            i.main_file().map_or(Err("It has no file to open.".to_string()), |f| desktop_kit::launch::open_file(&f.path))
+                                                        } else {
+                                                            desktop_kit::ui::open_in("publishkit", &i.app, &i.open, &EventHandler::new(|_: String| {}))
+                                                        };
+                                                        media_error.set(opened.err());
                                                     }
                                                 },
                                                 if scheduled { "⏱ " }
