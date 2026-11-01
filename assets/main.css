@@ -120,6 +120,18 @@ body { height: 100vh; overflow: hidden; background: var(--bg0); color: var(--tex
 .panel-resizer {
   flex: 0 0 6px; margin-left: -4px; margin-right: -2px; cursor: col-resize; z-index: 2;
   background: transparent; transition: background .12s;
+  position: relative;
+}
+/* A wider line over the border, with three dots mid-height to grab. */
+.panel-resizer::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px;
+  background: var(--border);
+}
+.panel-resizer::before {
+    content: ""; position: absolute; z-index: 1; pointer-events: none;
+    top: 50%; left: 50%; width: 4px; height: 22px; transform: translate(-50%, -50%);
+    border-radius: 2px;
+    background: radial-gradient(circle, var(--text3) 1.3px, transparent 1.6px) center / 4px 7.33px repeat-y;
 }
 .panel-resizer:hover, .panels.resizing .panel-resizer { background: var(--blue); opacity: .5; }
 .panels.resizing { cursor: col-resize; user-select: none; }
