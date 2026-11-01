@@ -31,6 +31,23 @@ user sees in the update prompt should all be accounted for.
   app.
 - A video attached to a draft shows as queued in the library, and as posted
   once its post goes out, in PolishCast and TrackCut too.
+- Plan ahead in the library: Plan… puts a video, audio or post you mean to
+  make on the calendar, with its outline or script. Once it is made, Claude
+  can hand the idea and its notes over to the take, recording or post.
+- Claude can now use the media library too: search it, read the calendar of
+  any week, plan an idea, and set an item's status, tags or notes. The same
+  in PolishCast, TrackCut and PublishKit.
+- When Claude marks a LinkedIn, X, Instagram or TikTok post as posted, it can
+  keep the post's address. The library then has an Online button for it, as
+  it does for published blog posts.
+- Post now, on a LinkedIn, X, Instagram or TikTok draft: copies its text,
+  opens the network in your browser and shows the photo or video to drag in,
+  selected in its folder. Mark as posted can keep the post's address.
+- When a social draft's planned time comes, PublishKit says so, in the app and
+  in a notification, since it doesn't post for you.
+- Claude can post a draft for you in Chrome, in your own session: it fills in
+  the text and attaches the files, then waits for your yes before posting,
+  and records the post with its address.
 
 ## [0.1.42] - 2026-10-31
 

@@ -273,7 +273,17 @@ pub(super) fn publish(args: &Value) -> Result<Value, String> {
     if let Some(channel) = kind {
         api::publish_social_post(&project, &cfg, channel, &lang, &name, at)
             .map_err(|e| format!("{e:#}"))?;
-        return Ok(json!({ "published": folder(&project, &cfg, &lang, kind, true).join(&name) }));
+        let posted = folder(&project, &cfg, &lang, kind, true).join(&name);
+        let mut v = json!({ "published": posted });
+        if let Some(url) = args["url"]
+            .as_str()
+            .map(str::trim)
+            .filter(|u| u.starts_with("http"))
+        {
+            api::set_url(&posted, url).map_err(|e| format!("{e:#}"))?;
+            v["url"] = json!(url);
+        }
+        return Ok(v);
     }
     if !args["force"].as_bool().unwrap_or(false) {
         let post = load_posts(&project)
@@ -300,6 +310,52 @@ pub(super) fn publish(args: &Value) -> Result<Value, String> {
         Some(run) => json!(format!("The post is published, but {} failed: {}", run.command, run.output)),
     };
     Ok(v)
+}
+
+pub(super) fn post_now(args: &Value) -> Result<Value, String> {
+    let project = project_path(args)?;
+    let cfg = ProjectConfig::load(&project);
+    let lang = language(args, &cfg)?;
+    let name = filename(args)?;
+    let channel = kind(args)?.ok_or("kind is the network: linkedin, x, instagram or tiktok")?;
+    let post = load_posts(&project)
+        .social(channel, &lang)
+        .queue
+        .into_iter()
+        .find(|p| p.filename == name)
+        .ok_or(format!(
+            "no queued {} draft {name} in {lang}",
+            channel.label()
+        ))?;
+    let media: Vec<std::path::PathBuf> = post.media.iter().map(|m| post.media_path(m)).collect();
+    let mut missing: Vec<String> = media
+        .iter()
+        .filter(|m| !m.is_file())
+        .map(|m| format!("{} isn't there any more", m.display()))
+        .collect();
+    if media.is_empty() && channel.needs_media() {
+        missing.push(format!(
+            "{} needs a photo or a video: attach one with update_post first",
+            channel.label()
+        ));
+    }
+    let text = post.body.trim().to_string();
+    if text.chars().count() > channel.limit() {
+        missing.push(format!(
+            "the text is longer than the {} characters {} takes",
+            channel.limit(),
+            channel.label()
+        ));
+    }
+    Ok(json!({
+        "network": channel.label(),
+        "compose_url": channel.compose_url(),
+        "text": text,
+        "media": media,
+        "planned": post.publish_at,
+        "missing": missing,
+        "after": "Once it is up: publish_post with kind, filename and the post's url.",
+    }))
 }
 
 pub(super) fn schedule(args: &Value) -> Result<Value, String> {

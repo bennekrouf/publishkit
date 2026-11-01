@@ -49,6 +49,18 @@ pub(super) fn tools() -> Value {
             },
         },
         {
+            "name": "post_now",
+            "description": "What posting a queued LinkedIn, X, Instagram or TikTok draft takes, for posting it by \
+                            hand or in the person's browser: the page where the network's post is written, the text \
+                            exactly as saved, the photos or video to attach (absolute paths, in order) and what is \
+                            still missing. Changes nothing: once the post is up, publish_post with its url records it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "project": project, "lang": lang, "filename": filename, "kind": kind },
+                "required": ["lang", "filename", "kind"],
+            },
+        },
+        {
             "name": "queue_post",
             "description": "Adds a blog draft to a language's queue, with the site's author and default tags. When \
                             project says title_heading, the file starts with the title as a heading, so don't repeat \
@@ -120,6 +132,7 @@ pub(super) fn tools() -> Value {
                 "properties": {
                     "project": project, "lang": lang, "filename": filename, "kind": kind,
                     "published_at": published_at,
+                    "url": { "type": "string", "description": "For a LinkedIn, X, Instagram or TikTok post: its address once it is up, kept with it and shown in the media library." },
                     "force": { "type": "boolean", "description": "Publish a blog post although its checks found problems. Only when the user says so." },
                 },
                 "required": ["lang", "filename"],

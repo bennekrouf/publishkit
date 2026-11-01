@@ -453,7 +453,29 @@ fn MainLayout(
     // Scheduled drafts go out while the window is open, those of every site in the list;
     // `publishkit publish-due --all` does it from cron or launchd when it isn't.
     use_future(move || async move {
+        // Social drafts already reminded of, this session.
+        let mut reminded = std::collections::HashSet::new();
         loop {
+            // A LinkedIn, X, Instagram or TikTok draft whose planned time has come: PublishKit
+            // doesn't post it, so it says so, here and in a notification.
+            let due = social_due(&posts.peek(), chrono::Local::now().naive_local());
+            let fresh: Vec<SocialPost> = due
+                .into_iter()
+                .filter(|p| reminded.insert(p.path.clone()))
+                .collect();
+            if let Some(first) = fresh.first() {
+                let more = match fresh.len() {
+                    1 => String::new(),
+                    n => format!(" (and {} more)", n - 1),
+                };
+                let line = format!(
+                    "Time to post on {}: {}{more}. Post now is in its preview.",
+                    first.channel.label(),
+                    first.topic
+                );
+                notify("PublishKit", &line);
+                notice.set(line);
+            }
             let sites = config.peek().sites();
             let open = config.peek().project_path.clone();
             for project in sites {
@@ -683,6 +705,47 @@ fn MainLayout(
             }
         }
     }
+}
+
+/// Queued social drafts whose planned time has passed.
+pub(crate) fn social_due(posts: &ProjectPosts, now: chrono::NaiveDateTime) -> Vec<SocialPost> {
+    let mut due = Vec::new();
+    for lang in &posts.languages {
+        for channel in Channel::ALL {
+            for post in posts.social(channel, lang).queue {
+                let at = post
+                    .publish_at
+                    .as_deref()
+                    .and_then(crate::plan::When::parse);
+                let passed = at.is_some_and(|w| {
+                    w.day < now.date()
+                        || (w.day == now.date() && w.time.is_none_or(|t| t <= now.time()))
+                });
+                if passed {
+                    due.push(post);
+                }
+            }
+        }
+    }
+    due
+}
+
+/// A notification from the system, beside the app's own notice. macOS only for now.
+fn notify(title: &str, body: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        let quoted = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+        let script = format!(
+            "display notification \"{}\" with title \"{}\"",
+            quoted(body),
+            quoted(title)
+        );
+        let _ = std::process::Command::new("osascript")
+            .args(["-e", &script])
+            .spawn();
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (title, body);
 }
 
 // ── Settings modal ────────────────────────────────────────────────────────────

@@ -63,6 +63,8 @@ pub(super) fn SocialItem(
     let mut marking = use_signal(|| false);
     let mut posted_at = use_signal(String::new);
     let mut mark_error = use_signal(String::new);
+    // The post's address once it is up, kept with it (optional).
+    let mut posted_url = use_signal(String::new);
 
     rsx! {
         div {
@@ -94,6 +96,14 @@ pub(super) fn SocialItem(
                         value: "{posted_at}",
                         oninput: move |e| posted_at.set(e.value()),
                     }
+                    input {
+                        r#type: "url",
+                        class: "posted-url",
+                        placeholder: "Its address (optional)",
+                        title: "Where the post is on {label}, to open it from the library",
+                        value: "{posted_url}",
+                        oninput: move |e| posted_url.set(e.value()),
+                    }
                     button {
                         class: "btn-micro btn-publish",
                         disabled: crate::plan::When::parse(&posted_at.read()).is_none(),
@@ -103,6 +113,12 @@ pub(super) fn SocialItem(
                             let at = crate::plan::When::parse(&posted_at.read());
                             match api::publish_social_post(&project, &pcfg, post_pub.channel, &post_pub.lang, &post_pub.filename, at) {
                                 Ok(()) => {
+                                    let url = posted_url.read().trim().to_string();
+                                    if url.starts_with("http") {
+                                        let (_, posted) = pcfg.resolve_social_paths(&project, post_pub.channel, &post_pub.lang);
+                                        let _ = api::set_url(&posted.join(&post_pub.filename), &url);
+                                    }
+                                    posted_url.set(String::new());
                                     marking.set(false);
                                     *posts.write() = load_posts(&project);
                                 }
@@ -568,6 +584,25 @@ fn reselect(
     selected.set(now);
 }
 
+/// Everything to post a draft by hand: its text on the clipboard, the network's page open in
+/// the browser, its first photo or video selected in its folder to drag in. Says what to do next.
+fn post_now(post: &SocialPost) -> String {
+    copy_to_clipboard(post.body.trim());
+    let label = post.channel.label();
+    if !desktop_kit::browser::open(post.channel.compose_url()) {
+        return format!("Text copied. Open {label} in your browser and paste it.");
+    }
+    let first = post.media.first().map(|m| post.media_path(m));
+    match first {
+        Some(file) if desktop_kit::launch::reveal(&file).is_ok() => format!(
+            "Text copied and {label} opened: paste the text, drag in the {} selected in its folder, post, then Mark as posted.",
+            if post.media.len() > 1 { "files" } else { "file" }
+        ),
+        _ if post.channel.needs_media() => format!("Text copied and {label} opened, but the post has no photo or video yet."),
+        _ => format!("Text copied and {label} opened: paste it, post, then Mark as posted."),
+    }
+}
+
 /// Sets a post's media to `sources`, then shows it as it is now; `error` says why not.
 fn change_media(
     post: &SocialPost,
@@ -717,6 +752,17 @@ pub(super) fn SocialPreviewPanel(
                                 }
                             },
                             if *copied.read() { "Copied ✓" } else { "Copy" }
+                        }
+                        if p.status != "published" {
+                            button {
+                                class: "btn-copy",
+                                title: "Copies the text, opens {channel.label()} in your browser and shows the media to attach in its folder",
+                                onclick: {
+                                    let p = p.clone();
+                                    move |_| share_status.set(post_now(&p))
+                                },
+                                "Post now"
+                            }
                         }
                     }
                     if let Some(text) = editing.read().clone() {

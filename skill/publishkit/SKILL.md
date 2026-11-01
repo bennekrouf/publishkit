@@ -1,6 +1,6 @@
 ---
 name: publishkit
-description: How to manage a blog with PublishKit, the desktop app that keeps a website's posts as markdown drafts per language with a publishing queue, a schedule, and LinkedIn, X, Instagram and TikTok posts (some folders hold social posts only). Read this skill before calling any publishkit tool (project, list_posts, get_post, queue_post, update_post, publish_post, schedule_post, queue_linkedin, queue_x, queue_instagram, queue_tiktok, repurpose, set_date, delete_post), because it has the site-voice rules, which actions go live and need the user's yes, and how to report drafts. Use it whenever the user mentions PublishKit, or asks to draft, queue, edit, translate, schedule, publish or delete a blog post on their site, plan a content calendar from what is already published, write or save LinkedIn, X, Instagram or TikTok posts or teasers, change a post's date, or repurpose a finished video or audio recording (PolishCast, TrackCut) into clips, carousel slides, social posts and a blog draft.
+description: How to manage a blog with PublishKit, the desktop app that keeps a website's posts as markdown drafts per language with a publishing queue, a schedule, and LinkedIn, X, Instagram and TikTok posts (some folders hold social posts only). Read this skill before calling any publishkit tool (project, list_posts, get_post, queue_post, update_post, publish_post, schedule_post, queue_linkedin, queue_x, queue_instagram, queue_tiktok, repurpose, post_now, set_date, delete_post, and the shared media library tools list_media, calendar, plan_media, fulfil_plan, set_media_status), because it has the site-voice rules, which actions go live and need the user's yes, and how to report drafts. Use it whenever the user mentions PublishKit, or asks to draft, queue, edit, translate, schedule, publish or delete a blog post on their site, plan a content calendar from what is already published, write or save LinkedIn, X, Instagram or TikTok posts or teasers, change a post's date, or repurpose a finished video or audio recording (PolishCast, TrackCut) into clips, carousel slides, social posts and a blog draft.
 ---
 
 # PublishKit
@@ -61,10 +61,64 @@ is available, the app is not connected:
    cut the clips or draw the slides: say so, and that every draft can be
    edited or deleted before posting. When the user has no transcript, ask
    for one rather than making times up.
+   To give a TikTok draft its video, call PolishCast's `export_clip` with
+   the draft's `repurposed_from` as `video` and its clip start and end, then
+   `update_post` with the clip as `media`.
 6. **Plan.** `schedule_post` sets a draft's stage (idea, draft, review) and
    the date and time it publishes by itself. For a network's draft the
    schedule is only a reminder on the calendar. `set_date` changes a post's
    date, published ones included.
+7. **The media library.** `list_media`, `get_media` and `calendar` read the
+   library PolishCast, TrackCut and PublishKit share: every take, recording
+   and post with its status, files and the drafts it went into. `plan_media`
+   puts an idea (a video to record, a post to write) on the calendar with its
+   outline as notes; `fulfil_plan` hands it to what was made for it.
+   `set_media_status`, `set_media_tags` and `set_media_notes` change an item.
+   When the user says a social post is up, `publish_post` with its `url`
+   keeps the address.
+
+## From an idea to LinkedIn and TikTok
+
+1. `plan_media` the video, with its script as notes; the user agrees the day.
+2. PolishCast: `start_recording`, `stop_recording`, the edits, `transcribe`,
+   `export` with `captions: files`.
+3. `fulfil_plan` with the take (`list_media` gives its id).
+4. `repurpose` the export (asking first: it spends credits), then read the
+   drafts back and fix what the user asks.
+5. For each TikTok draft: PolishCast `export_clip`, then `update_post` with
+   it. The LinkedIn draft gets the full export.
+6. `schedule_post` each draft, with the user's yes. PublishKit doesn't post
+   to LinkedIn or TikTok itself; at the planned time it reminds the user,
+   and the post goes up through Claude in Chrome (below) or by hand with the
+   draft's Post now button.
+7. `publish_post` with the post's `url` records it, and the take shows as
+   posted in the library.
+
+## Posting through Claude in Chrome
+
+When the user asks to post a queued LinkedIn, X, Instagram or TikTok draft
+and Claude in Chrome is connected (its tools are `mcp__claude-in-chrome__*`;
+read its skill first):
+
+1. `post_now` gives the network's page (`compose_url`), the text exactly as
+   saved, the files to attach and anything `missing`. Fix what is missing
+   first (attach the clip, shorten the text), never post around it.
+2. Open `compose_url` in a new tab of the user's Chrome, where they are
+   signed in. Never sign in for them: if a login page shows, ask them to.
+3. Paste the text as saved, without rewording it, and attach every file in
+   `media` with the file upload tool, in order. On TikTok, wait for the
+   video to finish processing.
+4. Stop before the network's Post button. Show the user what is ready
+   (network, first line of the text, files) and ask for a yes for this
+   post. A yes covers this one post only, never the next.
+5. After their yes, click Post, wait for the post to appear, and read its
+   address (open the post or the profile's latest post if the page doesn't
+   show it).
+6. `publish_post` with `kind`, `filename` and that `url`. Report the address.
+
+If anything on the page differs from the draft (an account other than the
+user's, a dialog asking for permissions, a captcha), stop and tell the
+user; never accept terms or permissions for them.
 
 ## Needs the user's yes first
 
@@ -72,6 +126,8 @@ is available, the app is not connected:
   and runs the site's publish command, which may build and deploy the site.
 - **`schedule_post`** with a date: the post goes live by itself then.
 - **`delete_post`**: removes a queued draft and its teasers.
+- **Clicking Post on LinkedIn, X, Instagram or TikTok** in Chrome: it goes
+  out under the user's name at once.
 
 Show the title, language and date, and for publishing the exact text that will
 go live, then wait for a clear yes. A yes for one post does not cover the next.

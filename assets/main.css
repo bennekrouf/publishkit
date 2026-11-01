@@ -712,3 +712,4 @@ select:focus { border-color: var(--blue); }
 .repurpose-hook { margin: 0; }
 .repurpose-slides { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .repurpose-origin .btn-micro { align-self: flex-start; }
+.mark-posted .posted-url { flex-basis: 100%; }

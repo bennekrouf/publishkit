@@ -42,7 +42,7 @@ fn label_of(channel: Option<Channel>, title: &str, out: bool) -> String {
     format!("{what}: {title}")
 }
 
-fn blog_item(project: &str, post: &Post, out: bool) -> Item {
+fn blog_item(project: &str, config: &ProjectConfig, post: &Post, out: bool) -> Item {
     let (status, when) = if out {
         (Status::Published, post.when)
     } else {
@@ -64,6 +64,8 @@ fn blog_item(project: &str, post: &Post, out: bool) -> Item {
     item.date = date_of(when);
     item.tags = post.tags.clone();
     item.open = post.path.to_string_lossy().into_owned();
+    let url = config.post_url(&post.lang, &post.filename);
+    item.url = (out && url.starts_with("http")).then_some(url);
     item
 }
 
@@ -96,6 +98,7 @@ fn social_item(project: &str, post: &SocialPost, out: bool) -> Item {
         item.files.push(shared::File { path, role });
     }
     item.network = Some(post.channel.key().to_string());
+    item.url = post.url.clone().filter(|_| out);
     item.date = date_of(when);
     item.open = post.path.to_string_lossy().into_owned();
     item
@@ -122,7 +125,7 @@ pub fn sync(project: &str, posts: &ProjectPosts) {
             .map(|p| (p, false))
             .chain(shelf.published.iter().map(|p| (p, true)))
         {
-            let item = blog_item(project, post, out);
+            let item = blog_item(project, &config, post, out);
             by_path.insert(
                 post.path.clone(),
                 (label_of(None, &post.title, out), item.status),

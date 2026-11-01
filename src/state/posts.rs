@@ -210,6 +210,7 @@ pub(super) fn parse_social_post(path: PathBuf, channel: Channel, lang: &str) -> 
         body,
         media: frontmatter::list(&fields, "media"),
         origin: crate::repurpose::Origin::of(&fields),
+        url: frontmatter::text(&fields, "url").filter(|u| u.starts_with("http")),
     })
 }
 
