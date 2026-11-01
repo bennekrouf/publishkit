@@ -15,6 +15,40 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- Library tab: every video, audio recording and picture from PolishCast and
+  TrackCut, with your posts, in one searchable list shared by all three apps.
+  Each shows where it stands (recording, polishing, ready, queued, posted or
+  published), its files and the drafts it went into. Set a status or tags by
+  hand, play a file, show it in its folder, or open it in the app that made
+  it. Drop videos, audio or pictures on the list to add them; they stay where
+  they are, nothing is copied.
+- The calendar also shows PolishCast takes and TrackCut recordings on the day
+  they last moved, coloured by where they stand. A click opens them in their
+  app.
+- A video attached to a draft shows as queued in the library, and as posted
+  once its post goes out, in PolishCast and TrackCut too.
+- Plan ahead in the library: Plan… puts a video, audio or post you mean to
+  make on the calendar, with its outline or script. Once it is made, Claude
+  can hand the idea and its notes over to the take, recording or post.
+- Claude can now use the media library too: search it, read the calendar of
+  any week, plan an idea, and set an item's status, tags or notes. The same
+  in PolishCast, TrackCut and PublishKit.
+- When Claude marks a LinkedIn, X, Instagram or TikTok post as posted, it can
+  keep the post's address. The library then has an Online button for it, as
+  it does for published blog posts.
+- Post now, on a LinkedIn, X, Instagram or TikTok draft: copies its text,
+  opens the network in your browser and shows the photo or video to drag in,
+  selected in its folder. Mark as posted can keep the post's address.
+- When a social draft's planned time comes, PublishKit says so, in the app and
+  in a notification, since it doesn't post for you.
+- Claude can post a draft for you in Chrome, in your own session: it fills in
+  the text and attaches the files, then waits for your yes before posting,
+  and records the post with its address.
+
 ## [0.1.42] - 2026-10-31
 
 ### Added

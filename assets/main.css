@@ -514,6 +514,11 @@ select:focus { border-color: var(--blue); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .calendar-item:hover { background: var(--bg3); }
+/* A recording from PolishCast or TrackCut, in its status's colour (the library's). */
+.calendar-item.media { border-left: 3px solid var(--kit-status); }
+.calendar-error { padding: 0 16px; }
+/* The shared library, in its own tab. */
+.library-pane { flex: 1; overflow: auto; background: var(--bg0); }
 .calendar-item.scheduled { background: var(--blue-dark); color: var(--text1); border: 1px dashed var(--blue); }
 .calendar-item.linkedin { border-left: 3px solid #0a66c2; }
 .calendar-item.scheduled.linkedin { border-left: 3px dashed #0a66c2; }
@@ -707,3 +712,4 @@ select:focus { border-color: var(--blue); }
 .repurpose-hook { margin: 0; }
 .repurpose-slides { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .repurpose-origin .btn-micro { align-self: flex-start; }
+.mark-posted .posted-url { flex-basis: 100%; }

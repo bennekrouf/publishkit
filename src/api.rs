@@ -307,6 +307,15 @@ pub fn publish_social_post(
 
 /// Sets the date of a post, queued or published, blog or social: written as that kind of
 /// post keeps it. A blog post's file name keeps its date prefix: links to it may use it.
+/// Keeps where a posted LinkedIn, X, Instagram or TikTok post is online, as `url` in its front
+/// matter.
+pub fn set_url(path: &Path, url: &str) -> Result<()> {
+    let content = std::fs::read_to_string(path).with_context(|| format!("{}", path.display()))?;
+    let format = frontmatter::split(&content).map_or(Format::Yaml, |p| p.format);
+    let updated = frontmatter::set(&content, "url", &Field::Text(url.to_string()), format);
+    std::fs::write(path, updated).with_context(|| format!("{}", path.display()))
+}
+
 pub fn set_date(path: &Path, social: bool, when: When, default: Format) -> Result<()> {
     let content = std::fs::read_to_string(path).with_context(|| format!("{}", path.display()))?;
     let format = frontmatter::split(&content).map_or(default, |p| p.format);

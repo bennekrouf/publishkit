@@ -56,6 +56,16 @@ impl Channel {
         }
     }
 
+    /// Where a post is written on the network's website, in the person's own session.
+    pub fn compose_url(self) -> &'static str {
+        match self {
+            Channel::LinkedIn => "https://www.linkedin.com/feed/?shareActive=true",
+            Channel::X => "https://x.com/compose/post",
+            Channel::Instagram => "https://www.instagram.com/",
+            Channel::TikTok => "https://www.tiktok.com/tiktokstudio/upload",
+        }
+    }
+
     /// Its mark in lists and on the calendar.
     pub fn badge(self) -> &'static str {
         match self {
@@ -144,6 +154,8 @@ pub struct SocialPost {
     pub media: Vec<String>,
     /// The recording it was repurposed from, with the clip or slides it carries.
     pub origin: Option<crate::repurpose::Origin>,
+    /// Where it is online, once posted, when that was noted.
+    pub url: Option<String>,
 }
 
 impl SocialPost {

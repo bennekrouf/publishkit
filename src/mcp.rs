@@ -47,7 +47,8 @@ the user before publishing, and before delete_post. schedule_post sets a draft's
 the date and time it is published by itself; ask the user before scheduling. A network's post can carry images \
 or one video (an Instagram carousel mixes both): media (file paths) on its queue tool or update_post, posted \
 posts included. PublishKit never posts to a network itself: such a draft's schedule is a reminder on the \
-calendar. set_date changes the date and time of a post, published ones included. repurpose turns a \
+calendar. post_now gives what posting a draft takes (the network's page, the text, the files to attach), \
+for posting it in the user's browser with their yes; publish_post with the post's url then records it. set_date changes the date and time of a post, published ones included. repurpose turns a \
 finished recording (a PolishCast video or a TrackCut audio file) and its transcript into drafts at once: clips \
 to cut with their times, a carousel's slides, a post per network and a blog draft. \
 Before calling these tools, read the publishkit skill if one is available: it has the confirmation \
@@ -98,15 +99,20 @@ async fn handle(id: Value, message: &Value) -> Value {
                     "protocolVersion": version,
                     "capabilities": { "tools": {} },
                     "serverInfo": { "name": "publishkit", "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": INSTRUCTIONS,
+                    "instructions": format!("{INSTRUCTIONS} {}", desktop_kit::library::mcp::INSTRUCTIONS),
                 }),
             )
         }
         "ping" => result(id, json!({})),
-        "tools/list" => result(id, json!({ "tools": tools() })),
+        "tools/list" => result(id, json!({ "tools": with_library(tools()) })),
         "tools/call" => {
             let name = params["name"].as_str().unwrap_or("");
-            let (text, is_error) = match call(name, &params["arguments"]).await {
+            let args = &params["arguments"];
+            let answer = match desktop_kit::library::mcp::call(name, args) {
+                Some(answer) => answer,
+                None => call(name, args).await,
+            };
+            let (text, is_error) = match answer {
                 Ok(value) => (pretty(&value), false),
                 Err(why) => (why, true),
             };
@@ -117,6 +123,14 @@ async fn handle(id: Value, message: &Value) -> Value {
         }
         _ => error(id, -32601, &format!("no method {method}")),
     }
+}
+
+/// The app's tools, then the media library's, which every Mayorana app serves alike.
+fn with_library(mut tools: Value) -> Value {
+    if let Some(list) = tools.as_array_mut() {
+        list.extend(desktop_kit::library::mcp::tools());
+    }
+    tools
 }
 
 async fn write(stdout: &mut tokio::io::Stdout, reply: &Value) {
@@ -159,6 +173,22 @@ fn without_nulls(value: Value) -> Value {
 // ── Tool definitions ─────────────────────────────────────────────────────────────────────
 
 async fn call(name: &str, args: &Value) -> Result<Value, String> {
+    let result = run(name, args).await;
+    // What changed shows in PolishCast's and TrackCut's library and calendar, even with
+    // PublishKit's window closed.
+    let reads = matches!(name, "project" | "list_posts" | "get_post" | "post_now");
+    if result.is_ok() && !reads {
+        if let Ok(project) = project_path(args) {
+            let _ = tokio::task::spawn_blocking(move || {
+                crate::library::sync(&project, &crate::state::load_posts(&project))
+            })
+            .await;
+        }
+    }
+    result
+}
+
+async fn run(name: &str, args: &Value) -> Result<Value, String> {
     match name {
         "project" => project_info(args),
         "list_posts" => list_posts(args),
@@ -167,6 +197,7 @@ async fn call(name: &str, args: &Value) -> Result<Value, String> {
         "update_post" => update_post(args),
         "set_social" => set_social(args).await,
         "publish_post" => publish(args),
+        "post_now" => post_now(args),
         "delete_post" => delete(args),
         "schedule_post" => schedule(args),
         "set_date" => set_date(args),

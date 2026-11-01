@@ -44,6 +44,7 @@ fn social(channel: Channel, body: &str, media: &[&str]) -> SocialPost {
         body: body.into(),
         media: media.iter().map(|m| m.to_string()).collect(),
         origin: None,
+        url: None,
     }
 }
 
@@ -86,6 +87,7 @@ fn a_folder_of_social_posts_only_shows_no_blog_and_hides_what_was_unticked() {
             ContentMode::Social(Channel::Instagram),
             ContentMode::Social(Channel::TikTok),
             ContentMode::Calendar,
+            ContentMode::Library,
         ]
     );
     assert_eq!(
@@ -137,5 +139,44 @@ fn a_real_image_in_a_post_is_measured() {
     assert!(
         found[0].starts_with("a.png is 1×1: TikTok fills the screen"),
         "{found:?}"
+    );
+}
+
+#[test]
+fn a_social_draft_is_due_once_its_planned_time_has_passed() {
+    let planned = |at: Option<&str>| SocialPost {
+        publish_at: at.map(String::from),
+        ..social(Channel::TikTok, "Hi", &["clip.mp4"])
+    };
+    let mut posts = ProjectPosts::empty();
+    posts.languages = vec!["en".into()];
+    let shelf = crate::state::Shelf {
+        queue: vec![
+            planned(Some("2026-11-03T09:00")),
+            planned(Some("2026-11-03T18:00")),
+            planned(Some("2026-11-02")),
+            planned(None),
+        ],
+        published: Vec::new(),
+    };
+    posts
+        .social
+        .entry(Channel::TikTok)
+        .or_default()
+        .insert("en".into(), shelf);
+    let now = chrono::NaiveDate::from_ymd_opt(2026, 11, 3)
+        .unwrap()
+        .and_hms_opt(12, 0, 0)
+        .unwrap();
+    let due: Vec<Option<String>> = social_due(&posts, now)
+        .into_iter()
+        .map(|p| p.publish_at)
+        .collect();
+    assert_eq!(
+        due,
+        [
+            Some("2026-11-03T09:00".to_string()),
+            Some("2026-11-02".to_string())
+        ]
     );
 }
