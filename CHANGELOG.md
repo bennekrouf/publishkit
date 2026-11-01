@@ -15,6 +15,15 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- PublishKit now wears the warm amber of its icon instead of violet, in both
+  the dark and the light theme, so the window and the icon in your dock look
+  like the same app. Buttons, the selected post and links keep text easy to
+  read against the new colours.
+
 ## [0.1.45] - 2026-11-01
 
 ### Added
