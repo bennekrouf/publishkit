@@ -15,6 +15,14 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Fixed
+
+- The application now correctly handles file paths in test environments,
+  ensuring compatibility across different operating systems. This fix prevents
+  potential issues when running tests on Windows.
+
 ## [0.1.54] - 2026-11-02
 
 ### Changed
