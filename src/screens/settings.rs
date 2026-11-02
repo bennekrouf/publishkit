@@ -9,6 +9,7 @@ pub(super) fn SettingsModal(
     config: Signal<AppConfig>,
     show_settings: Signal<bool>,
     posts: Signal<ProjectPosts>,
+    theme: Theme,
 ) -> Element {
     let cfg = config.read().clone();
 
@@ -217,6 +218,9 @@ pub(super) fn SettingsModal(
                     {sections::blog_accounts(accounts)}
                 }
                 {sections::social_accounts(accounts)}
+
+                h3 { class: "settings-section", "General" }
+                desktop_kit::ui::SettingsGeneral { theme }
 
                 if !saved_msg.read().is_empty() {
                     p { class: "settings-saved", "{saved_msg}" }

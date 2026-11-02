@@ -3,7 +3,7 @@ use crate::state::{
     content_stamp, load_posts, site_label, AppConfig, Channel, Drafts, LlmProvider, Post, Preset,
     ProjectConfig, ProjectPosts, SocialPost,
 };
-use desktop_kit::ui::{Header, Theme};
+use desktop_kit::ui::{Header, Theme, Toolbar};
 use dioxus::prelude::*;
 use pulldown_cmark::{html, Options, Parser};
 mod posts;
@@ -345,51 +345,6 @@ fn SiteSwitcher(
     }
 }
 
-/// The api0 region posts are written in, flag and name, and a click to change it right here.
-#[component]
-fn ModelSwitcher(config: Signal<AppConfig>) -> Element {
-    let mut open = use_signal(|| false);
-    let region = config.read().provider.region();
-    rsx! {
-        div { class: "model-switcher",
-            button {
-                class: "kit-btn kit-model",
-                title: "The model posts are written with \u{2014} click to change it",
-                onclick: move |_| open.toggle(),
-                match region {
-                    Some(r) => rsx! {
-                        desktop_kit::ui::RegionFlag { id: r.id }
-                        span { "{r.label}" }
-                    },
-                    None => rsx! { span { "{config.read().provider.label()}" } },
-                }
-                span { class: "model-caret", "\u{25BE}" }
-            }
-            if open() {
-                div { class: "model-backdrop", onclick: move |_| open.set(false) }
-                div { class: "model-menu",
-                    for r in crate::api0::REGIONS {
-                        button {
-                            key: "{r.id}",
-                            class: if region == Some(r) { "model-option active" } else { "model-option" },
-                            title: "api0, in {r.label}",
-                            onclick: move |_| {
-                                let mut cfg = config.write();
-                                cfg.provider = LlmProvider::api0(r.id);
-                                cfg.save();
-                                drop(cfg);
-                                open.set(false);
-                            },
-                            desktop_kit::ui::RegionFlag { id: r.id }
-                            span { "{r.label}" }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ── Main layout ───────────────────────────────────────────────────────────────
 
 #[component]
@@ -456,48 +411,20 @@ fn MainLayout(
     rsx! {
         div { class: "layout",
             Header {
-                theme,
                 on_settings: move |_| show_settings.toggle(),
                 on_mcp: move |_| show_mcp.set(true),
-                actions: rsx! {
-                    button {
-                        class: "kit-btn",
-                        title: "Turn a finished video or audio recording into clips, slides, posts and a blog draft",
-                        onclick: move |_| {
-                            handoff.set(None);
-                            show_repurpose.set(true);
-                        },
-                        "Repurpose"
+                model: rsx! {
+                    desktop_kit::ui::ModelBadge {
+                        label: config.read().provider.region().map_or_else(|| config.read().provider.label().to_string(), |r| r.label.to_string()),
+                        region: config.read().provider.region().map(|r| r.id),
+                        title: "the model posts are written with \u{2014} click to change it",
+                        onclick: move |_| show_settings.set(true),
                     }
-                    button {
-                        class: "kit-btn kit-icon",
-                        title: "Read the posts from disk again",
-                        onclick: move |_| {
-                            let p = config.read().project_path.clone().unwrap_or_default();
-                            *posts.write() = load_posts(&p);
-                        },
-                        "↻"
-                    }
-                    {layout::deploy_button(&site, config, deploying, notice, show_settings)}
                 },
-                model: rsx! { ModelSwitcher { config } },
                 pro: rsx! { desktop_kit::ui::ProButton { pro, hint: crate::pro::HINT } },
+            }
+            Toolbar {
                 SiteSwitcher { config, posts, selected, editor_mode, active_lang, notice }
-                {
-                    rsx! {
-                        if let Some(preset) = site.preset.filter(|_| site.blog) {
-                            button {
-                                class: "kit-btn kit-icon",
-                                title: "Read as {preset.label()} — change it in Settings",
-                                aria_label: "Site format: {preset.label()}",
-                                onclick: move |_| show_settings.set(true),
-                                svg { view_box: "0 0 24 24", "aria-hidden": "true",
-                                    path { d: "M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" }
-                                }
-                            }
-                        }
-                    }
-                }
                 div { class: "kit-tabs",
                     for tab in modes {
                         button {
@@ -508,7 +435,26 @@ fn MainLayout(
                         }
                     }
                 }
-                span { class: "kit-detail", { config.read().project_path.as_deref().unwrap_or("") } }
+                span { class: "kit-spacer" }
+                button {
+                    class: "kit-btn",
+                    title: "Turn a finished video or audio recording into clips, slides, posts and a blog draft",
+                    onclick: move |_| {
+                        handoff.set(None);
+                        show_repurpose.set(true);
+                    },
+                    "Repurpose"
+                }
+                button {
+                    class: "kit-btn kit-icon",
+                    title: "Read the posts from disk again",
+                    onclick: move |_| {
+                        let p = config.read().project_path.clone().unwrap_or_default();
+                        *posts.write() = load_posts(&p);
+                    },
+                    "↻"
+                }
+                {layout::deploy_button(&site, config, deploying, notice, show_settings)}
             }
 
             div {
@@ -558,7 +504,7 @@ fn MainLayout(
 
             // Settings modal overlay
             if *show_settings.read() {
-                SettingsModal { config, show_settings, posts }
+                SettingsModal { config, show_settings, posts, theme }
             }
             if show_mcp() {
                 crate::mcp::McpModal { show: show_mcp }
