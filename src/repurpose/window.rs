@@ -2,6 +2,10 @@
 
 use super::*;
 use crate::state::{load_posts, AppConfig, ProjectPosts};
+use desktop_kit::library::{
+    pick::{self, Want},
+    Role,
+};
 use dioxus::prelude::*;
 
 /// What a run left: the drafts and the notes on them, or why it failed.
@@ -87,6 +91,8 @@ pub fn RepurposeModal(
     });
     let title = sent.map(|h| h.title).unwrap_or_default();
     let mut pasted = use_signal(String::new);
+    // The library picker, while it is open: for the recording (true) or its transcript (false).
+    let mut picking = use_signal(|| None::<bool>);
     let mut lang = use_signal({
         let first = languages.first().cloned().unwrap_or_default();
         move || first
@@ -142,24 +148,7 @@ pub fn RepurposeModal(
                         button {
                             class: "btn-small",
                             disabled: running(),
-                            onclick: move |_| {
-                                spawn(async move {
-                                    let Some(file) = rfd::AsyncFileDialog::new()
-                                        .set_title("Choose a video or audio recording")
-                                        .add_filter("Video and audio", &MEDIA_EXTENSIONS)
-                                        .pick_file()
-                                        .await
-                                    else {
-                                        return;
-                                    };
-                                    let path = file.path().to_path_buf();
-                                    // Its subtitles, when they are beside it by the same name.
-                                    if transcript_file.peek().is_none() {
-                                        transcript_file.set(sidecar(&path));
-                                    }
-                                    media.set(Some(path));
-                                });
-                            },
+                            onclick: move |_| picking.set(Some(true)),
                             "Choose…"
                         }
                     }
@@ -181,19 +170,7 @@ pub fn RepurposeModal(
                         button {
                             class: "btn-small",
                             disabled: running(),
-                            onclick: move |_| {
-                                spawn(async move {
-                                    let Some(file) = rfd::AsyncFileDialog::new()
-                                        .set_title("Choose the transcript")
-                                        .add_filter("Subtitles or text", &TRANSCRIPT_EXTENSIONS)
-                                        .pick_file()
-                                        .await
-                                    else {
-                                        return;
-                                    };
-                                    transcript_file.set(Some(file.path().to_path_buf()));
-                                });
-                            },
+                            onclick: move |_| picking.set(Some(false)),
                             "Choose…"
                         }
                     }
@@ -319,6 +296,37 @@ pub fn RepurposeModal(
                         if running() { "Writing the drafts…" } else { "Repurpose" }
                     }
                 }
+            }
+        }
+        if let Some(for_media) = picking() {
+            desktop_kit::ui::FilePicker {
+                want: if for_media {
+                    Want::new("publishkit", "Choose a recording to repurpose")
+                        .roles(&[Role::Video, Role::Audio, Role::Clip, Role::Source])
+                        .extensions(&MEDIA_EXTENSIONS)
+                } else {
+                    Want::new("publishkit", "Choose the transcript")
+                        .roles(&[Role::Captions, Role::Text, Role::Other])
+                        .extensions(&TRANSCRIPT_EXTENSIONS)
+                        .near(media.peek().clone())
+                },
+                on_pick: move |files: Vec<PathBuf>| {
+                    picking.set(None);
+                    let Some(path) = files.into_iter().next() else { return };
+                    if for_media {
+                        // Its subtitles: beside it by the same name, or kept with it in the library.
+                        if transcript_file.peek().is_none() {
+                            let found = sidecar(&path).or_else(|| {
+                                pick::companion(&desktop_kit::library::load_all(), &path, Role::Captions)
+                            });
+                            transcript_file.set(found);
+                        }
+                        media.set(Some(path));
+                    } else {
+                        transcript_file.set(Some(path));
+                    }
+                },
+                on_close: move |_| picking.set(None),
             }
         }
     }

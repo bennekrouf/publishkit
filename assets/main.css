@@ -437,21 +437,11 @@ select:focus { border-color: var(--blue); }
 ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); background-clip: content-box; }
 
-/* Usage-statistics notice, shown once along the bottom edge. */
 
-/* "Use PublishKit from Claude": what to paste, and where. */
-.mcp-modal { width: min(620px, calc(100vw - 32px)); }
-.mcp-lead { font-size: 12.5px; line-height: 1.6; }
-.mcp-snippet-wrap { position: relative; }
-.mcp-snippet {
-  margin: 0; padding: 10px 76px 10px 12px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--bg0); color: var(--text1);
-  font: 11.5px var(--mono); line-height: 1.5;
-  white-space: pre-wrap; word-break: break-all; user-select: text; -webkit-user-select: text;
-}
-.mcp-copy { position: absolute; top: 6px; right: 6px; }
-.mcp-path, .mcp-note code { word-break: break-all; }
-.mcp-note { padding: 9px 11px; border-radius: 6px; background: var(--bg2); line-height: 1.6; }
+
+
+
+
 
 /* ── Post list: search and filters, stage and schedule badges ── */
 .list-filters { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 0; }
@@ -657,8 +647,8 @@ select:focus { border-color: var(--blue); }
 
 .social-share { display: flex; gap: 6px; margin-top: 8px; }
 
-/* Action buttons: the same 30px wherever they sit; Copy inside a snippet stays small. */
-.btn-small:not(.mcp-copy) { height: 30px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; display: inline-flex; align-items: center; justify-content: center; }
+/* Action buttons: the same 30px wherever they sit. */
+.btn-small { height: 30px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; display: inline-flex; align-items: center; justify-content: center; }
 
 
 /* ── LinkedIn and X posts: written by hand, the model on request ── */

@@ -63,31 +63,6 @@ fn a_body_keeps_the_front_matter() {
 }
 
 #[test]
-fn the_desktop_entry_starts_this_app_in_mcp_mode() {
-    let config: Value = serde_json::from_str(&desktop_config(
-        "/Applications/PublishKit.app/Contents/MacOS/publishkit",
-    ))
-    .unwrap();
-    assert_eq!(
-        config["mcpServers"]["publishkit"]["command"],
-        "/Applications/PublishKit.app/Contents/MacOS/publishkit"
-    );
-    assert_eq!(config["mcpServers"]["publishkit"]["args"], json!(["mcp"]));
-    assert_eq!(
-        code_command("/A B/publishkit"),
-        "claude mcp add publishkit --scope user -- \"/A B/publishkit\" mcp"
-    );
-}
-
-#[test]
-fn the_codex_command_quotes_a_path_with_spaces() {
-    assert_eq!(
-        codex_command("/A B/publishkit"),
-        "codex mcp add publishkit -- \"/A B/publishkit\" mcp"
-    );
-}
-
-#[test]
 fn every_network_has_a_queue_tool_and_a_kind() {
     let tools = tools();
     let tools = tools.as_array().unwrap();
