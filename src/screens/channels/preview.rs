@@ -84,6 +84,8 @@ pub(in crate::screens) fn SocialPreviewPanel(
     // The text being changed, while it is.
     let mut editing = use_signal(|| None::<String>);
     let mut share_status = use_signal(String::new);
+    // The library picker for the post's photos and videos, while it is open.
+    let picking = use_signal(|| false);
     let posting = use_signal(|| false);
     // Read once per post: the images are encoded for the page, which a click shouldn't redo.
     let media = use_memo(move || selected.read().as_ref().map(shown).unwrap_or_default());
@@ -147,7 +149,7 @@ pub(in crate::screens) fn SocialPreviewPanel(
                     div { class: "social-card-header",
                         span { class: icon, "{channel.badge()}" }
                         span { "{channel.label()}" }
-                        {card_actions(&p, channel, media_kinds, editing, copied, share_status, Ctx { config, posts, selected, media_error })}
+                        {card_actions(&p, channel, media_kinds, editing, copied, share_status, picking)}
                     }
                     {card_body(&p, channel, editing, Ctx { config, posts, selected, media_error })}
                     if !media_error.read().is_empty() {
@@ -165,6 +167,9 @@ pub(in crate::screens) fn SocialPreviewPanel(
                     if !share_status.read().is_empty() {
                         p { class: "status-msg", "{share_status}" }
                     }
+                }
+                if picking() {
+                    {media_picker(&p, channel, media_kinds, picking, Ctx { config, posts, selected, media_error })}
                 }
             } else {
                 div { class: "preview-empty",
@@ -184,6 +189,54 @@ struct Ctx {
     media_error: Signal<String>,
 }
 
+/// The library's photos and videos for the post: clips first where the feed is video, words
+/// from the post bringing what it's about to the top. Chosen ones are added to what it has.
+fn media_picker(
+    p: &SocialPost,
+    channel: Channel,
+    media_kinds: &str,
+    mut picking: Signal<bool>,
+    ctx: Ctx,
+) -> Element {
+    use desktop_kit::library::{pick::Want, Role};
+    let Ctx {
+        config,
+        posts,
+        selected,
+        media_error,
+    } = ctx;
+    let roles: &[Role] = if channel.needs_media() {
+        &[Role::Clip, Role::Video, Role::Image, Role::Thumbnail]
+    } else {
+        &[Role::Image, Role::Thumbnail, Role::Clip, Role::Video]
+    };
+    let current: Vec<std::path::PathBuf> = p.media.iter().map(|m| p.media_path(m)).collect();
+    let want = Want::new(
+        "publishkit",
+        format!("{media_kinds} for this {} post", channel.label()),
+    )
+    .roles(roles)
+    .extensions(&[
+        "png", "jpg", "jpeg", "gif", "webp", "mp4", "mov", "webm", "mkv", "avi",
+    ])
+    .multiple()
+    .about(&p.body)
+    .exclude(current);
+    let post = p.clone();
+    rsx! {
+        desktop_kit::ui::FilePicker {
+            want,
+            on_pick: move |files: Vec<std::path::PathBuf>| {
+                picking.set(false);
+                let mut sources: Vec<std::path::PathBuf> = post.media.iter().map(std::path::PathBuf::from).collect();
+                sources.extend(files);
+                change_media(&post, &sources, config, posts, selected, media_error);
+            },
+            on_close: move |_| picking.set(false),
+        }
+    }
+}
+
 /// The card's buttons: Edit, Add media, Copy, Post now.
 fn card_actions(
     p: &SocialPost,
@@ -192,14 +245,8 @@ fn card_actions(
     mut editing: Signal<Option<String>>,
     mut copied: Signal<bool>,
     mut share_status: Signal<String>,
-    ctx: Ctx,
+    mut picking: Signal<bool>,
 ) -> Element {
-    let Ctx {
-        config,
-        posts,
-        selected,
-        media_error,
-    } = ctx;
     rsx! {
         if editing.read().is_none() {
             button {
@@ -215,26 +262,7 @@ fn card_actions(
         button {
             class: "btn-copy",
             title: "{media_kinds}, copied next to the post",
-            onclick: {
-                let p = p.clone();
-                move |_| {
-                    let p = p.clone();
-                    spawn(async move {
-                        let Some(files) = rfd::AsyncFileDialog::new()
-                            .set_title("Add images or a video")
-                            .add_filter("Images and videos", &["png", "jpg", "jpeg", "gif", "mp4", "mov", "webm", "mkv", "avi"])
-                            .pick_files()
-                            .await
-                        else {
-                            return;
-                        };
-                        let mut sources: Vec<std::path::PathBuf> =
-                            p.media.iter().map(std::path::PathBuf::from).collect();
-                        sources.extend(files.iter().map(|f| f.path().to_path_buf()));
-                        change_media(&p, &sources, config, posts, selected, media_error);
-                    });
-                }
-            },
+            onclick: move |_| picking.set(true),
             "Add media…"
         }
         button {

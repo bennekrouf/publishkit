@@ -15,6 +15,21 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Changed
+
+- The "Use PublishKit from Claude or Codex" window now looks and reads the same
+  as in the other Mayorana apps, with a copy button on every step, and Escape
+  closes it.
+- Add media…, Image… and Repurpose's Choose… now open a picker of what your
+  other apps made instead of Finder: PolishCast clips and videos, TrackCut
+  recordings, pictures you used before, the best fits first. Clips come first
+  for TikTok and Instagram, and anything sharing words with the post rises to
+  the top. Choosing a recording to repurpose fills in its subtitles too when
+  PolishCast made them. The disk is still there, one link at the bottom, and
+  hovering a file shows where it lives.
+
 ## [0.1.50] - 2026-11-02
 
 ### Changed

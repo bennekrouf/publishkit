@@ -391,40 +391,5 @@ fn split_front_matter(content: &str) -> Option<&str> {
 
 // ── The window ───────────────────────────────────────────────────────────────────────────
 
-/// This executable, as a client should start it.
-fn command() -> String {
-    std::env::current_exe()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "publishkit".into())
-}
-
-/// The `mcpServers` entry for Claude Desktop's config file. Built with serde so a Windows
-/// path's backslashes arrive escaped.
-pub fn desktop_config(command: &str) -> String {
-    let config = json!({ "mcpServers": { "publishkit": { "command": command, "args": ["mcp"] } } });
-    serde_json::to_string_pretty(&config).unwrap_or_default()
-}
-
-/// The one line that adds it to Claude Code, for every project.
-pub fn code_command(command: &str) -> String {
-    format!("claude mcp add publishkit --scope user -- \"{command}\" mcp")
-}
-
-/// The one line that adds it to Codex. Its CLI, IDE extension and app share
-/// one list of servers, each one there for every project.
-pub fn codex_command(command: &str) -> String {
-    format!("codex mcp add publishkit -- \"{command}\" mcp")
-}
-
-fn desktop_config_path() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "%APPDATA%\\Claude\\claude_desktop_config.json"
-    } else if cfg!(target_os = "macos") {
-        "~/Library/Application Support/Claude/claude_desktop_config.json"
-    } else {
-        "~/.config/Claude/claude_desktop_config.json"
-    }
-}
-
 #[cfg(test)]
 mod tests;

@@ -80,7 +80,7 @@ fn editing_shows_the_box_with_the_text_being_changed() {
 
 #[test]
 fn the_actions_offer_edit_and_post_now_on_a_draft_only() {
-    let draft = render(None, |ctx, editing| {
+    let draft = render(None, |_ctx, editing| {
         let s = use_signal(String::new);
         card_actions(
             &post("Hi", &[]),
@@ -89,14 +89,14 @@ fn the_actions_offer_edit_and_post_now_on_a_draft_only() {
             editing,
             use_signal(|| false),
             s,
-            ctx,
+            use_signal(|| false),
         )
     });
     assert!(
         draft.contains("Edit") && draft.contains("Post now"),
         "{draft}"
     );
-    let published = render(Some("x"), |ctx, editing| {
+    let published = render(Some("x"), |_ctx, editing| {
         let mut p = post("Hi", &[]);
         p.status = "published".into();
         let s = use_signal(String::new);
@@ -107,7 +107,7 @@ fn the_actions_offer_edit_and_post_now_on_a_draft_only() {
             editing,
             use_signal(|| false),
             s,
-            ctx,
+            use_signal(|| false),
         )
     });
     assert!(

@@ -261,6 +261,8 @@ pub fn PostEditor(
         });
     };
 
+    // The library picker for the post's images, while it is open.
+    let mut picking_images = use_signal(|| false);
     let mut add_images = move |paths: Vec<PathBuf>| {
         let project = project();
         let pcfg = ProjectConfig::load(&project);
@@ -451,18 +453,7 @@ pub fn PostEditor(
                 button {
                     class: "btn-small",
                     title: "Copy an image into the site and link it where the cursor is. You can also drop images on the text.",
-                    onclick: move |_| {
-                        spawn(async move {
-                            if let Some(files) = rfd::AsyncFileDialog::new()
-                                .set_title("Add images")
-                                .add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"])
-                                .pick_files()
-                                .await
-                            {
-                                add_images(files.iter().map(|f| f.path().to_path_buf()).collect());
-                            }
-                        });
-                    },
+                    onclick: move |_| picking_images.set(true),
                     "Image…"
                 }
                 for lang in others {
@@ -655,6 +646,25 @@ pub fn PostEditor(
                     disabled: !unsaved,
                     onclick: move |_| save(),
                     "Save"
+                }
+            }
+            if picking_images() {
+                {
+                    let (title, tags) = selected.read().as_ref().map(|p| (p.title.clone(), p.tags.join(" "))).unwrap_or_default();
+                    rsx! {
+                        desktop_kit::ui::FilePicker {
+                            want: desktop_kit::library::pick::Want::new("publishkit", "Images for this post")
+                                .roles(&[desktop_kit::library::Role::Image, desktop_kit::library::Role::Thumbnail])
+                                .extensions(&["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"])
+                                .multiple()
+                                .about(&format!("{title} {tags}")),
+                            on_pick: move |files: Vec<PathBuf>| {
+                                picking_images.set(false);
+                                add_images(files);
+                            },
+                            on_close: move |_| picking_images.set(false),
+                        }
+                    }
                 }
             }
         }
