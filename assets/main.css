@@ -54,8 +54,7 @@ body {
   --kit-muted:  var(--text3);
   --kit-accent: var(--blue);
 }
-.kit-header .kit-btn.kit-deploy { color: var(--green); border-color: var(--green); }
-.model-option .kit-flag { width: 18px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+.kit-toolbar .kit-btn.kit-deploy { color: var(--green); border-color: var(--green); }
 .kit-flag { width: 30px; height: 20px; border-radius: 2px; }
 
 /* Light palette: on while body has `light`, which the header's theme toggle
@@ -293,25 +292,7 @@ a.btn-small { text-decoration: none; }
 .blog-content th { background: var(--bg2); font-weight: 600; }
 .blog-content hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
 
-/* ── Model switcher (topbar) ─────── */
-.model-switcher { position: relative; flex-shrink: 0; }
-
-.model-caret { font-size: 9px; color: var(--text3); }
-.model-backdrop { position: fixed; inset: 0; z-index: 90; }
-.model-menu {
-  position: absolute; top: calc(100% + 4px); right: 0; z-index: 91; min-width: 170px;
-  display: flex; flex-direction: column; padding: 4px;
-  background: var(--bg1); border: 1px solid var(--border); border-radius: 6px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
-}
-.model-option {
-  font-family: inherit; display: flex; align-items: center; justify-content: flex-start; gap: 8px; height: 30px; padding: 0 10px;
-  background: none; border: 1px solid transparent; border-radius: 4px;
-  color: var(--text1); font-size: 12px; cursor: pointer; text-align: left;
-}
-.model-option:hover { background: var(--bg2); }
-.model-option.active { border-color: var(--blue); background: var(--blue-dark); }
-.kit-header select.site-switcher { height: 28px; box-sizing: border-box; flex-shrink: 0; }
+.kit-toolbar select.site-switcher { height: 28px; box-sizing: border-box; flex-shrink: 0; }
 
 /* ── Modal ───────────────────────── */
 .modal-backdrop {
