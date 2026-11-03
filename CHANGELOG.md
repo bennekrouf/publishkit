@@ -15,6 +15,16 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Fixed
+
+- Repurpose a recording no longer stops with "the model's reply wasn't the JSON
+  asked for" when the model sends a caption, slide or post in a slightly
+  different shape than asked, such as a caption with its hashtags listed
+  separately. The text is now read as meant and your drafts are queued as
+  usual.
+
 ## [0.1.56] - 2026-11-03
 
 ### Changed
