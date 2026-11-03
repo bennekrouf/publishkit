@@ -14,6 +14,7 @@ use crate::state::{Channel, LlmProvider, ProjectConfig};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
+mod loose;
 mod window;
 pub use window::*;
 
@@ -266,32 +267,47 @@ impl Request {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Plan {
+    #[serde(deserialize_with = "loose::text")]
     pub title: String,
+    #[serde(deserialize_with = "loose::text")]
     pub summary: String,
     pub clips: Vec<Clip>,
+    #[serde(deserialize_with = "loose::texts")]
     pub slides: Vec<String>,
+    #[serde(deserialize_with = "loose::text")]
     pub linkedin: String,
+    #[serde(deserialize_with = "loose::text")]
     pub x: String,
+    #[serde(deserialize_with = "loose::text")]
     pub instagram: String,
+    #[serde(deserialize_with = "loose::blog")]
     pub blog: Option<BlogDraft>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Clip {
+    #[serde(deserialize_with = "loose::time")]
     pub start: Option<f64>,
+    #[serde(deserialize_with = "loose::time")]
     pub end: Option<f64>,
     /// The words it opens on, for an untimed transcript: the passage to find and cut.
+    #[serde(deserialize_with = "loose::text")]
     pub quote: String,
+    #[serde(deserialize_with = "loose::text")]
     pub hook: String,
+    #[serde(deserialize_with = "loose::text")]
     pub caption: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct BlogDraft {
+    #[serde(deserialize_with = "loose::text")]
     pub title: String,
+    #[serde(deserialize_with = "loose::text")]
     pub summary: String,
+    #[serde(deserialize_with = "loose::text")]
     pub body: String,
 }
 
@@ -371,7 +387,8 @@ fn prompt(request: &Request, cfg: &ProjectConfig) -> (String, String, bool) {
     if wants(Channel::Instagram) {
         fields.push(
             "\"slides\": 5-8 carousel slides / quote cards, in order: a hook slide, then one idea or \
-             quote each (max 25 words per slide), then a closing call to action"
+             quote each (max 25 words per slide), then a closing call to action; an array of \
+             strings, one per slide"
                 .into(),
         );
         fields.push(format!(
@@ -412,6 +429,10 @@ fn prompt(request: &Request, cfg: &ProjectConfig) -> (String, String, bool) {
     let user = format!(
         "This is the transcript of a {kind}.\n{about}\
          Reply with ONLY a JSON object (no markdown fences, no extra text) with these fields:\n- {}\n\n\
+         Every text field is ONE plain JSON string, never an object or an array, with its hashtags \
+         written inside it. Only \"clips\" and \"slides\" are arrays, and only \"blog\" and each \
+         clip are objects. Keep the field names in English, exactly as above, whatever the \
+         language of the content.\n\n\
          Transcript{}:\n{transcript}",
         fields.join("\n- "),
         if timed { " (each line starts at [minutes:seconds])" } else { "" },

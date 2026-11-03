@@ -88,6 +88,73 @@ fn the_reply_is_found_inside_fences_and_chatter() {
     assert!(parse_plan("no json").is_err());
 }
 
+/// A reply to an untimed French transcript that once failed with "invalid type: map, expected a
+/// string at line 32 column 4": objects and arrays where strings were asked for.
+#[test]
+fn a_reply_with_objects_where_text_was_asked_is_flattened() {
+    let raw = r###"{
+  "title": "L'IA, c'est bien, mais je n'ai pas confiance",
+  "summary": "Pourquoi on hésite encore à confier son travail à l'IA.",
+  "clips": [
+    {
+      "quote": "L'IA c'est bien mais je n'ai pas confiance",
+      "hook": "Tu fais confiance à l'IA ?",
+      "caption": {
+        "text": "La confiance, ça se construit.",
+        "hashtags": ["#IA", "confiance", "#tech"]
+      }
+    },
+    {
+      "quote": "Le problème ce n'est pas l'outil",
+      "hook": ["Le problème", "ce n'est pas l'outil"],
+      "caption": "Et vous ? #IA"
+    }
+  ],
+  "slides": [
+    "Tu fais confiance à l'IA ?",
+    {"title": "Idée 1", "text": "Vérifie toujours."},
+    {"heading": "Idée 2", "body": "Commence petit."}
+  ],
+  "instagram": "Carrousel #IA",
+  "linkedin": {
+    "hook": "Je n'ai pas confiance en l'IA.",
+    "paragraphs": ["Et pourtant je l'utilise.", "Voici pourquoi."]
+  },
+  "x": {
+    "text": "La confiance dans l'IA se gagne."
+    },
+  "blog": "## Introduction\n\nL'IA est partout."
+}"###;
+    let plan = parse_plan(raw).unwrap();
+    assert_eq!(
+        plan.clips[0].caption,
+        "La confiance, ça se construit.\n#IA #confiance #tech"
+    );
+    assert_eq!(plan.clips[1].hook, "Le problème\nce n'est pas l'outil");
+    assert_eq!(
+        plan.slides,
+        vec![
+            "Tu fais confiance à l'IA ?",
+            "Idée 1\nVérifie toujours.",
+            "Idée 2\nCommence petit."
+        ]
+    );
+    assert_eq!(
+        plan.linkedin,
+        "Je n'ai pas confiance en l'IA.\nEt pourtant je l'utilise.\nVoici pourquoi."
+    );
+    assert_eq!(plan.x, "La confiance dans l'IA se gagne.");
+    assert_eq!(
+        plan.blog.unwrap().body,
+        "## Introduction\n\nL'IA est partout."
+    );
+
+    let plan =
+        parse_plan(r#"{"clips": [{"start": "1:02", "end": "75.5", "caption": "C"}]}"#).unwrap();
+    assert_eq!(plan.clips[0].start, Some(62.0));
+    assert_eq!(plan.clips[0].end, Some(75.5));
+}
+
 #[test]
 fn clips_are_kept_inside_the_recording_and_apart() {
     let req = request(
