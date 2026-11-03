@@ -11,6 +11,8 @@ pub(super) fn SettingsModal(
     posts: Signal<ProjectPosts>,
     theme: Theme,
 ) -> Element {
+    let mut show = show_settings;
+    desktop_kit::ui::use_escape(EventHandler::new(move |_| show.set(false)));
     let cfg = config.read().clone();
 
     let selected_provider = use_signal(|| cfg.provider.clone());
