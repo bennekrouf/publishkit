@@ -795,8 +795,14 @@ jobs:
           > **Node.js ≥18** is required on all platforms for post publishing (`generate-blog-data.js`).
           EOF
 
-          gh release create "$TAG" \
-            --title "publishkit $TAG" \
-            --notes-file notes.md \
-            release/latest.json \
-            release/releases.json
+          # A re-run of a failed build (a macOS runner that never came) finds
+          # the release already made: refresh its feeds rather than fail.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" --clobber release/latest.json release/releases.json
+          else
+            gh release create "$TAG" \
+              --title "publishkit $TAG" \
+              --notes-file notes.md \
+              release/latest.json \
+              release/releases.json
+          fi
