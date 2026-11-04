@@ -1,6 +1,7 @@
 //! What the main window keeps doing in the background, and its Deploy button.
 
 use super::*;
+mod deploy;
 
 /// Scheduled drafts go out while the window is open, those of every site in the list;
 /// `publishkit publish-due --all` does it from cron or launchd when it isn't.
@@ -126,43 +127,19 @@ pub(super) fn use_outside_changes(
     });
 }
 
-/// Runs the site's deploy command. A folder of social posts only has no site to put online.
+/// The Deploy button, which asks first in a dialog of its own: see `deploy`. A folder of social
+/// posts only has no site to put online.
 pub(super) fn deploy_button(
     site: &ProjectConfig,
     config: Signal<AppConfig>,
-    mut deploying: Signal<bool>,
-    mut notice: Signal<String>,
-    mut show_settings: Signal<bool>,
+    deploying: Signal<bool>,
+    notice: Signal<String>,
+    show_settings: Signal<bool>,
 ) -> Element {
     let command = site.deploy_command.clone();
     rsx! {
         if site.blog {
-            button {
-                class: "kit-btn kit-deploy",
-                disabled: deploying(),
-                title: if command.is_empty() { "Set the command that puts your site online in Settings".to_string() } else { format!("Runs {command}") },
-                onclick: move |_| {
-                    let project = config.read().project_path.clone().unwrap_or_default();
-                    let pcfg = ProjectConfig::load(&project);
-                    if pcfg.deploy_command.trim().is_empty() {
-                        notice.set("Set the command that puts your site online in Settings → After publishing / Deploy.".to_string());
-                        show_settings.set(true);
-                        return;
-                    }
-                    deploying.set(true);
-                    notice.set(format!("Deploying with {}…", pcfg.deploy_command));
-                    spawn(async move {
-                        let run = tokio::task::spawn_blocking(move || api::deploy(&project, &pcfg)).await.ok().flatten();
-                        notice.set(match run {
-                            Some(run) if run.ok => format!("Deployed: {} ran.", run.command),
-                            Some(run) => format!("The deploy failed: {}", run.output),
-                            None => String::new(),
-                        });
-                        deploying.set(false);
-                    });
-                },
-                if deploying() { "Deploying…" } else { "Deploy" }
-            }
+            deploy::DeployControl { config, deploying, notice, show_settings, command }
         }
     }
 }

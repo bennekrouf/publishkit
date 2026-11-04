@@ -483,7 +483,7 @@ fn MainLayout(
                         crate::views::Board { config, posts, selected, editor_mode, content_mode, active_lang, notice }
                     },
                     ContentMode::Calendar => rsx! {
-                        crate::views::Calendar { posts, selected, editor_mode, content_mode, active_lang, social_selected, library }
+                        crate::views::Calendar { config, posts, selected, editor_mode, content_mode, active_lang, social_selected, library }
                     },
                     ContentMode::Library => rsx! {
                         div { class: "library-pane",
