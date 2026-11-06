@@ -410,6 +410,8 @@ pub fn Calendar(
     let mut over = use_signal(|| None::<NaiveDate>);
     // Where the pointer is while an entry is dragged, for its ghost.
     let mut pointer = use_signal(|| None::<(f64, f64)>);
+    // The point of the card that was pressed, kept under the pointer while it moves.
+    let mut grip = use_signal(|| (0.0_f64, 0.0_f64));
     // The entry whose date is being typed: it, the day and the time.
     let mut editing = use_signal(|| None::<(Entry, String, String)>);
     let mut move_to =
@@ -556,6 +558,7 @@ pub fn Calendar(
                 if let Some((_, item, scheduled)) = held() {
                     desktop_kit::ui::DragGhost {
                         pointer,
+                        grip: grip(),
                         class: if scheduled { "calendar-item calendar-ghost scheduled" } else { "calendar-item calendar-ghost" },
                         title: item.title().to_string(),
                     }
@@ -648,6 +651,8 @@ pub fn Calendar(
                                                 title: "{tip}",
                                                 onmousedown: move |e| {
                                                     if e.trigger_button() == Some(dioxus::html::input_data::MouseButton::Primary) {
+                                                        let inside = e.element_coordinates();
+                                                        grip.set((inside.x, inside.y));
                                                         held.set(Some(grab.clone()));
                                                     }
                                                 },
