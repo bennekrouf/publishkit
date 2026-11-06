@@ -314,11 +314,85 @@ impl Item {
     }
 }
 
+/// Moves a calendar entry to `day` at `time`. A published post gets that date in its front
+/// matter; a scheduled one is planned for then (a blog draft only from now on: one whose time
+/// has passed is published at once); a recording keeps it in the shared library.
+fn move_item(
+    project: &str,
+    item: &Item,
+    scheduled: bool,
+    day: NaiveDate,
+    time: Option<chrono::NaiveTime>,
+) -> Result<(), String> {
+    let cfg = ProjectConfig::load(project);
+    let when = plan::When { day, time };
+    // A scheduled post always has a time: its own, else nine in the morning.
+    let at = || {
+        plan::format_when(day.and_time(
+            time.unwrap_or_else(|| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap_or_default()),
+        ))
+    };
+    match item {
+        Item::Blog(post) if scheduled => {
+            let at = at();
+            let due =
+                plan::parse_when(&at).is_some_and(|a| a <= chrono::Local::now().naive_local());
+            if due {
+                return Err(
+                    "Pick a time to come: a draft scheduled in the past is published right away."
+                        .into(),
+                );
+            }
+            plan::update(project, &post.lang, &post.filename, |e| {
+                e.publish_at = Some(at)
+            })
+            .map_err(|e| format!("Couldn't reschedule it: {e}"))
+        }
+        Item::Social(post) if scheduled => plan::plan_social(
+            project,
+            post.channel,
+            &post.lang,
+            &post.filename,
+            Some(at()),
+        )
+        .map_err(|e| format!("Couldn't reschedule it: {e}")),
+        Item::Blog(post) => api::set_date(&post.path, false, when, cfg.front_matter)
+            .map_err(|e| format!("Couldn't change its date: {e:#}")),
+        Item::Social(post) => api::set_date(&post.path, true, when, cfg.front_matter)
+            .map_err(|e| format!("Couldn't change its date: {e:#}")),
+        Item::Media(i) => {
+            let date = match time {
+                Some(t) => format!("{}T{}", day.format("%Y-%m-%d"), t.format("%H:%M")),
+                None => day.format("%Y-%m-%d").to_string(),
+            };
+            desktop_kit::library::set_date(&i.id, &date)
+                .map_err(|e| format!("Couldn't move it: {e}"))
+        }
+    }
+}
+
+/// An entry on the calendar: when on its day, the post or recording, and whether it is scheduled.
+type Entry = (Option<chrono::NaiveTime>, Item, bool);
+
+/// The day an entry is on: its post's date, or for a scheduled one its planned day.
+fn entry_day(entry: &Entry) -> Option<NaiveDate> {
+    let (_, item, scheduled) = entry;
+    let when = match item {
+        Item::Blog(p) if *scheduled => p.publish_at.as_deref().and_then(plan::When::parse),
+        Item::Social(p) if *scheduled => p.publish_at.as_deref().and_then(plan::When::parse),
+        Item::Blog(p) => p.when,
+        Item::Social(p) => p.when,
+        Item::Media(i) => plan::When::parse(&i.date),
+    };
+    when.map(|w| w.day)
+}
+
 /// Monday-first day names, for the calendar's head.
 const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 #[component]
 pub fn Calendar(
+    config: Signal<AppConfig>,
     posts: Signal<ProjectPosts>,
     selected: Signal<Option<Post>>,
     editor_mode: Signal<bool>,
@@ -331,6 +405,24 @@ pub fn Calendar(
     let today = chrono::Local::now().date_naive();
     let mut media_error = use_signal(|| None::<String>);
     let mut month = use_signal(|| (today.year(), today.month()));
+    // The entry held down, while it is dragged to another day, and the day it is over.
+    let mut held = use_signal(|| None::<Entry>);
+    let mut over = use_signal(|| None::<NaiveDate>);
+    // Where the pointer is while an entry is dragged, for its ghost.
+    let mut pointer = use_signal(|| None::<(f64, f64)>);
+    // The entry whose date is being typed: it, the day and the time.
+    let mut editing = use_signal(|| None::<(Entry, String, String)>);
+    let mut move_to =
+        move |entry: &Entry, day: NaiveDate, time: Option<chrono::NaiveTime>| -> bool {
+            let project = config.peek().project_path.clone().unwrap_or_default();
+            let (_, item, scheduled) = entry;
+            let moved = move_item(&project, item, *scheduled, day, time);
+            let ok = moved.is_ok();
+            media_error.set(moved.err());
+            posts.set(load_posts(&project));
+            library.set(desktop_kit::library::load_all());
+            ok
+        };
     let (year, number) = month();
     let first = NaiveDate::from_ymd_opt(year, number, 1).unwrap_or(today);
     let next_first = if number == 12 {
@@ -346,7 +438,6 @@ pub fn Calendar(
     // What went out on each day, and what is due out, each with its time when known.
     let all = posts.read().clone();
     let multilingual = all.languages.len() > 1;
-    type Entry = (Option<chrono::NaiveTime>, Item, bool);
     let mut by_day: BTreeMap<NaiveDate, Vec<Entry>> = BTreeMap::new();
     let mut add = |when: Option<plan::When>, item: Item, scheduled: bool| {
         if let Some(w) = when {
@@ -401,6 +492,45 @@ pub fn Calendar(
                 button { class: "btn-small", onclick: move |_| month.set((today.year(), today.month())), "Today" }
                 span { class: "settings-hint", "Blog and social posts on the day they went out; ⏱ scheduled drafts on the day they go out; recordings from PolishCast and TrackCut on the day they last changed, coloured by where they stand." }
             }
+            if let Some(((_, item, _), day, time)) = editing() {
+                div { class: "calendar-edit",
+                    span { class: "calendar-edit-title", "Move “{item.title()}” to" }
+                    input {
+                        r#type: "date",
+                        value: "{day}",
+                        oninput: move |e| {
+                            if let Some(p) = editing.write().as_mut() {
+                                p.1 = e.value();
+                            }
+                        },
+                    }
+                    input {
+                        r#type: "time",
+                        title: "Leave empty for no time of day",
+                        value: "{time}",
+                        oninput: move |e| {
+                            if let Some(p) = editing.write().as_mut() {
+                                p.2 = e.value();
+                            }
+                        },
+                    }
+                    button {
+                        class: "btn-small btn-primary",
+                        disabled: NaiveDate::parse_from_str(&day, "%Y-%m-%d").is_err(),
+                        onclick: move |_| {
+                            let Some((entry, day, time)) = editing.peek().clone() else { return };
+                            let Ok(day) = NaiveDate::parse_from_str(&day, "%Y-%m-%d") else { return };
+                            let time = chrono::NaiveTime::parse_from_str(time.get(..5).unwrap_or(&time), "%H:%M").ok();
+                            if move_to(&entry, day, time) {
+                                editing.set(None);
+                                month.set((day.year(), day.month()));
+                            }
+                        },
+                        "Move"
+                    }
+                    button { class: "btn-small", onclick: move |_| editing.set(None), "Cancel" }
+                }
+            }
             if let Some(e) = media_error() {
                 p { class: "repurpose-error calendar-error", "{e}" }
             }
@@ -409,7 +539,27 @@ pub fn Calendar(
                     div { class: "calendar-weekday", "{name}" }
                 }
             }
-            div { class: "calendar-grid",
+            div {
+                class: if held.read().is_some() { "calendar-grid dragging" } else { "calendar-grid" },
+                onmouseleave: move |_| {
+                    held.set(None);
+                    over.set(None);
+                    pointer.set(None);
+                },
+                onmousemove: move |e| {
+                    if held.peek().is_some() {
+                        let at = e.client_coordinates();
+                        pointer.set(Some((at.x, at.y)));
+                    }
+                },
+                onmouseup: move |_| pointer.set(None),
+                if let Some((_, item, scheduled)) = held() {
+                    desktop_kit::ui::DragGhost {
+                        pointer,
+                        class: if scheduled { "calendar-item calendar-ghost scheduled" } else { "calendar-item calendar-ghost" },
+                        title: item.title().to_string(),
+                    }
+                }
                 for i in 0..cells {
                     {
                         let day = first + chrono::Duration::days(i - offset);
@@ -420,11 +570,37 @@ pub fn Calendar(
                             (true, false) => "calendar-day",
                             (false, false) => "calendar-day outside",
                         };
+                        let class = if over() == Some(day) { format!("{class} drop") } else { class.to_string() };
                         rsx! {
-                            div { class,
+                            div {
+                                class,
+                                onmouseenter: move |_| {
+                                    if held.peek().is_some() {
+                                        over.set(Some(day));
+                                    }
+                                },
+                                onmouseup: move |_| {
+                                    over.set(None);
+                                    let Some(entry) = held.take() else { return };
+                                    let from = entry_day(&entry);
+                                    if from != Some(day) {
+                                        move_to(&entry, day, entry.0);
+                                    }
+                                },
                                 div { class: "calendar-day-number", "{day.day()}" }
                                 for (time, item, scheduled) in items {
                                     {
+                                        let entry: Entry = (time, item.clone(), scheduled);
+                                        let grab = entry.clone();
+                                        let edit = entry.clone();
+                                        let right = entry.clone();
+                                        let is_held = held.read().as_ref().is_some_and(|h| h.1 == item);
+                                        let mut start_edit = move |entry: &Entry| {
+                                            media_error.set(None);
+                                            let day = entry_day(entry).map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
+                                            let time = entry.0.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
+                                            editing.set(Some((entry.clone(), day, time)));
+                                        };
                                         let lang = if multilingual { format!("{} · ", item.lang().to_uppercase()) } else { String::new() };
                                         let time = time.map(|t| t.format("%H:%M ").to_string()).unwrap_or_default();
                                         let network = match &item {
@@ -436,7 +612,8 @@ pub fn Calendar(
                                             _ => None,
                                         };
                                         let class = format!(
-                                            "calendar-item{}{}{}",
+                                            "calendar-item{}{}{}{}",
+                                            if is_held { " held" } else { "" },
                                             if scheduled { " scheduled" } else { "" },
                                             network.map(|c| format!(" {}", c.key())).unwrap_or_default(),
                                             media.as_ref().map(|i| format!(" media kit-status-{}", i.status.key())).unwrap_or_default()
@@ -464,10 +641,20 @@ pub fn Calendar(
                                             Some(label) => format!("{tip} ({label})"),
                                             None => tip,
                                         };
+                                        let tip = format!("{tip} — drag it to another day to move it");
                                         rsx! {
                                             div {
                                                 class,
                                                 title: "{tip}",
+                                                onmousedown: move |e| {
+                                                    if e.trigger_button() == Some(dioxus::html::input_data::MouseButton::Primary) {
+                                                        held.set(Some(grab.clone()));
+                                                    }
+                                                },
+                                                oncontextmenu: move |e| {
+                                                    e.prevent_default();
+                                                    start_edit(&right);
+                                                },
                                                 onclick: move |_| match item.clone() {
                                                     Item::Blog(post) => open(post, selected, editor_mode, content_mode, active_lang),
                                                     Item::Social(post) => {
@@ -489,6 +676,16 @@ pub fn Calendar(
                                                 if let Some(c) = network { span { class: "calendar-in {c.key()}", "{c.badge()}" } }
                                                 "{time}{lang}{title}"
                                                 if let Some(label) = carries { span { class: "calendar-media", " {label}" } }
+                                                span {
+                                                    class: "calendar-pen",
+                                                    title: "Change its date",
+                                                    onmousedown: move |e| e.stop_propagation(),
+                                                    onclick: move |e| {
+                                                        e.stop_propagation();
+                                                        start_edit(&edit);
+                                                    },
+                                                    "✎"
+                                                }
                                             }
                                         }
                                     }

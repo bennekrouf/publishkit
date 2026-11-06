@@ -15,6 +15,26 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- On the Calendar, drag a post or a recording to another day to move it: the
+  card follows the pointer and the day it will land on is outlined. Or hover
+  it and click ✎ (or right-click it) to type the new date and time. A
+  published post gets the new date in its file; a scheduled one is planned for
+  then. A scheduled blog draft can't be moved into the past, where it would be
+  published right away.
+
+### Changed
+
+- Deploy now asks first, in a small dialog of its own: which site folder goes
+  online, the exact command it runs (once, now, on this computer) and whether
+  it also runs by itself after each publish, with a switch for that right
+  there. With no command set yet, the dialog asks for one, with examples such
+  as git push or vercel --prod, instead of opening the whole Settings window.
+  Everything else is a click away under All settings….
+
 ## [0.1.58] - 2026-11-04
 
 ### Changed
