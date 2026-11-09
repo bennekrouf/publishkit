@@ -287,7 +287,7 @@ pub enum LlmProvider {
 
 impl Default for LlmProvider {
     fn default() -> Self {
-        LlmProvider::api0(crate::api0::REGIONS[0].id)
+        LlmProvider::api0(crate::api0::DEFAULT_REGION.id)
     }
 }
 

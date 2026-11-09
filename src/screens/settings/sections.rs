@@ -2,7 +2,7 @@
 //! are sent to.
 
 use super::*;
-use crate::api0::Region;
+use crate::api0::{Region, COMING_SOON};
 use crate::crosspost::Accounts;
 
 /// The model: api0's regions, one click each, and what using one takes.
@@ -21,7 +21,8 @@ pub(super) fn model_section(
                     button {
                         key: "{r.id}",
                         class: if region == Some(r) { "region active" } else { "region" },
-                        title: "api0, in {r.label}",
+                        disabled: note == COMING_SOON,
+                        title: if note == COMING_SOON { COMING_SOON.to_string() } else { format!("api0, in {}", r.label) },
                         onclick: move |_| *selected_provider.write() = LlmProvider::api0(r.id),
                         desktop_kit::ui::RegionFlag { id: r.id }
                         span { class: "region-label", "{r.label}" }

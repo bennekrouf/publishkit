@@ -24,10 +24,14 @@ pub(super) fn SettingsModal(
         offers.set(Some(crate::api0::regions().await));
     });
     let has_licence = crate::api0::licence().is_some();
+    let closed = desktop_kit::ui::use_closed_regions();
     let region_notes: Vec<(&'static crate::api0::Region, String)> = crate::api0::REGIONS
         .iter()
         .map(|r| {
             let note = match offers.read().as_ref() {
+                _ if closed.read().iter().any(|c| c == r.id) => {
+                    crate::api0::COMING_SOON.to_string()
+                }
                 _ if !has_licence => "needs a licence".to_string(),
                 None => "\u{2026}".to_string(),
                 Some(Err(_)) => "unavailable".to_string(),
