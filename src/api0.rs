@@ -19,7 +19,9 @@ pub const BASE_URL: &str = "https://gateway.api0.ai/v1";
 /// Read before the shared licence, for a number kept out of the apps.
 pub const KEY_ENV: &str = "API0_API_KEY";
 
-pub use desktop_kit::region::{find as region, Region, REGIONS};
+pub use desktop_kit::region::{
+    find as region, Region, COMING_SOON, DEFAULT as DEFAULT_REGION, REGIONS,
+};
 
 /// Tokens in a typical post: the brief, the prompt and 600–800 words back. Only for the
 /// estimate.

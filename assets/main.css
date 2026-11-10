@@ -357,7 +357,8 @@ select:focus { border-color: var(--blue); }
   border: 2px solid var(--border); border-radius: 6px; cursor: pointer;
   transition: border-color .15s, background .15s;
 }
-.region:hover { border-color: var(--blue); }
+.region:not(:disabled):hover { border-color: var(--blue); }
+.region:disabled { opacity: 0.5; cursor: default; }
 .region.active { border-color: var(--blue); background: var(--blue-dark); color: var(--text1); }
 
 .region-label { font-size: 13px; font-weight: 700; color: var(--text1); }

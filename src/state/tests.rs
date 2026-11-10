@@ -20,7 +20,7 @@ fn a_region_is_saved_and_read_back() {
     cfg = serde_json::from_str(r#"{"project_path":"/site","provider":"Other","api_key":"k"}"#)
         .unwrap();
     assert_eq!(cfg.project_path.as_deref(), Some("/site"));
-    assert_eq!(cfg.provider.region().map(|r| r.id), Some("europe"));
+    assert_eq!(cfg.provider.region().map(|r| r.id), Some("china"));
 }
 
 fn site(files: &[(&str, &str)]) -> PathBuf {
