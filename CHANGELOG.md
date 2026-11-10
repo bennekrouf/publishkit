@@ -15,6 +15,14 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Added
+
+- Region buttons now have a disabled state for regions that are coming soon.
+  These buttons are grayed out and unclickable, with a tooltip indicating that
+  the region is not yet available.
+
 ## [0.1.59] - 2026-11-06
 
 ### Added
