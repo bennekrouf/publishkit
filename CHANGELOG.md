@@ -15,6 +15,13 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Fixed
+
+- An open region no longer reads "unavailable" when its price couldn't be
+  fetched. It stays selectable and says "price unknown".
+
 ## [0.1.60] - 2026-11-10
 
 ### Added
