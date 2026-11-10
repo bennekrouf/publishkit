@@ -257,7 +257,12 @@ pub(crate) async fn call(
         .json(&body)
         .send()
         .await
-        .with_context(|| format!("{name} request failed"))?;
+        .map_err(|e| {
+            anyhow::anyhow!(crate::api0::network_error(
+                &format!("{name} request failed"),
+                &e
+            ))
+        })?;
 
     if !resp.status().is_success() {
         let s = resp.status();
