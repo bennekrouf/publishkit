@@ -34,7 +34,9 @@ pub(super) fn SettingsModal(
                 }
                 _ if !has_licence => "needs a licence".to_string(),
                 None => "\u{2026}".to_string(),
-                Some(Err(_)) => "unavailable".to_string(),
+                // Only the price could not be read: the closed list above
+                // is what says whether the region is open.
+                Some(Err(_)) => "price unknown".to_string(),
                 Some(Ok(list)) => match list.iter().find(|o| o.id == r.id) {
                     Some(o) => {
                         let n = o.credits_per_post();

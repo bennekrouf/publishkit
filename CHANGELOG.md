@@ -23,6 +23,13 @@ user sees in the update prompt should all be accounted for.
   says whether it was a timeout, a proxy, a certificate or a name that couldn't
   be resolved.
 
+## [0.1.61] - 2026-11-10
+
+### Fixed
+
+- An open region no longer reads "unavailable" when its price couldn't be
+  fetched. It stays selectable and says "price unknown".
+
 ## [0.1.60] - 2026-11-10
 
 ### Added
