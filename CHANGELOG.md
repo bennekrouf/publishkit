@@ -15,6 +15,14 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Fixed
+
+- When api0 or your model can't be reached, the error gives the full cause and
+  says whether it was a timeout, a proxy, a certificate or a name that couldn't
+  be resolved.
+
 ## [0.1.61] - 2026-11-10
 
 ### Fixed
