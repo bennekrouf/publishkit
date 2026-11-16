@@ -217,18 +217,11 @@ fn shown(post: &SocialPost) -> Vec<Shown> {
         .collect()
 }
 
-/// Opens a file in the app the system has for it.
+/// Opens a file in the app the system has for it. Never through `cmd`, which would read `&` in a
+/// media file's name as the start of another command.
 fn open_file(path: &std::path::Path) {
-    let mut command = if cfg!(target_os = "macos") {
-        std::process::Command::new("open")
-    } else if cfg!(target_os = "windows") {
-        let mut c = std::process::Command::new("cmd");
-        c.args(["/C", "start", ""]);
-        c
-    } else {
-        std::process::Command::new("xdg-open")
-    };
-    let _ = command.arg(path).spawn(); // nothing to open it with: the click does nothing
+    // Nothing to open it with: the click does nothing.
+    let _ = desktop_kit::launch::open_file(path);
 }
 
 /// A post's date as the lists show it: its day, and its time when known.
