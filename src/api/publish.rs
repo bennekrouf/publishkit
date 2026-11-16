@@ -1,6 +1,8 @@
 //! Publishing: moving a draft live, running the site's deploy command, and posts that are due.
 
 use super::*;
+#[cfg(windows)]
+use crate::no_window::NoWindow;
 
 /// Moves a network's draft to the posted ones, dated `at` when it went out earlier (posted
 /// on the network first, saved here after), else today.
@@ -276,6 +278,7 @@ pub(super) fn shell(command: &str) -> std::process::Command {
             command = format!("\"{}\" {rest}", node_command().display());
         }
         let mut c = std::process::Command::new("cmd");
+        c.no_window();
         c.args(["/C", &command]);
         c
     }
