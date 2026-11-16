@@ -15,6 +15,14 @@ Each heading is dated on the day its tag was pushed. Releases that carried only
 build or packaging work say so rather than being hidden: the version numbers a
 user sees in the update prompt should all be accounted for.
 
+## [Unreleased]
+
+### Fixed
+
+- On Windows, opening a post's picture or video from its preview works when
+  the file's name holds `&`. The name used to go through the command prompt,
+  which read what came after `&` as another command to run.
+
 ## [0.1.63] - 2026-11-14
 
 ### Changed
