@@ -1,3 +1,6 @@
+// Release builds on Windows are GUI programs: no cmd window opens beside the app.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod api;
 mod api0;
 mod checks;
@@ -7,6 +10,7 @@ mod frontmatter;
 mod kit;
 mod library;
 mod mcp;
+mod no_window;
 mod plan;
 mod pro;
 mod repurpose;
@@ -26,6 +30,24 @@ pub fn window_title(status: &desktop_kit::licence::Status) -> String {
     )
 }
 
+/// A Windows GUI build has no console of its own: borrow the one of the
+/// terminal it was started from, so command-line output still shows there.
+/// Does nothing when started some other way (no parent console).
+#[cfg(windows)]
+fn attach_parent_console() {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn AttachConsole(process_id: u32) -> i32;
+    }
+    const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
+    unsafe {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
+#[cfg(not(windows))]
+fn attach_parent_console() {}
+
 fn main() {
     kit::init();
     // `publishkit mcp`: the posts over stdio for an MCP client, and no window. Before the log
@@ -37,6 +59,7 @@ fn main() {
     // `publishkit publish-due [site folder | --all]`: what is scheduled and due goes out, for
     // cron or launchd to run when the window isn't open.
     if std::env::args().nth(1).as_deref() == Some("publish-due") {
+        attach_parent_console();
         std::process::exit(publish_due_cli());
     }
     tracing_subscriber::fmt::init();

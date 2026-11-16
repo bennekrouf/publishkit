@@ -1,6 +1,8 @@
 //! Images, translations and removing a queued post.
 
 use super::*;
+#[cfg(windows)]
+use crate::no_window::NoWindow;
 
 /// Copies an image into the site's images folder, under a name of its own, and gives the
 /// address to link it at. A page bundle keeps its images in its own folder, linked by name.
@@ -155,6 +157,7 @@ pub(super) fn node_command() -> std::path::PathBuf {
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
         let user_node = std::path::Path::new(&local).join(r"Programs\nodejs\node.exe");
         let on_path = std::process::Command::new("node")
+            .no_window()
             .arg("--version")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
