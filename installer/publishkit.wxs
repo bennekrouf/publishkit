@@ -37,7 +37,7 @@
     <Launch Condition="Installed OR WindowsBuild &gt;= 17763"
             Message="PublishKit needs Windows 10 version 1809 or later." />
 
-    <Icon Id="PublishKitIcon" SourceFile="..\assets\icon.ico" />
+    <Icon Id="PublishKitIcon" SourceFile="assets\icon.ico" />
     <Property Id="ARPPRODUCTICON" Value="PublishKitIcon" />
     <Property Id="ARPURLINFOABOUT" Value="https://mayorana.ch/en/apps/publishkit" />
     <Property Id="ARPHELPLINK" Value="https://github.com/Bennekrouf/publishkit/issues" />
@@ -89,19 +89,19 @@
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="PublishKit">
         <Component Id="App">
-          <File Id="PublishKitExe" Source="..\target\release\publishkit.exe" KeyPath="yes" />
+          <File Id="PublishKitExe" Source="target\release\publishkit.exe" KeyPath="yes" />
         </Component>
         <Component Id="WebView2Loader">
-          <File Source="..\target\release\WebView2Loader.dll" KeyPath="yes" />
+          <File Source="target\release\WebView2Loader.dll" KeyPath="yes" />
         </Component>
         <Component Id="AppIcon">
-          <File Id="IconFile" Source="..\assets\icon.ico" KeyPath="yes" />
+          <File Id="IconFile" Source="assets\icon.ico" KeyPath="yes" />
         </Component>
         <Component Id="SetupScript">
-          <File Source="..\scripts\setup-windows.ps1" KeyPath="yes" />
+          <File Source="scripts\setup-windows.ps1" KeyPath="yes" />
         </Component>
         <Component Id="Readme">
-          <File Source="..\README.md" KeyPath="yes" />
+          <File Source="README.md" KeyPath="yes" />
         </Component>
       </Directory>
     </StandardDirectory>
