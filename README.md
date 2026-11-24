@@ -115,11 +115,11 @@ Click a post, draft or published, to open it in the center editor. Edit the raw 
 ## Use from Claude (MCP)
 
 `publishkit mcp` serves the site's posts to an MCP client over stdio, with no window
-(`src/mcp.rs`); the **MCP** button in the top bar shows the Claude Desktop config and the
-Claude Code command. The tools: `project`, `list_posts`, `get_post`, `queue_post`,
-`update_post`, `set_social`, `publish_post`, `schedule_post`, `crosspost_post`,
-`delete_post`, `set_date`, `queue_linkedin`, `queue_x`, `queue_instagram`,
-`queue_tiktok` and `repurpose`. They call
+(`src/mcp.rs`). The **MCP** button at the top of the window installs it in Claude Desktop,
+Claude Code, Codex and VS Code, shows where it is installed and running, and tests it. The
+tools: `project`, `list_posts`, `get_post`, `queue_post`, `update_post`, `set_social`,
+`publish_post`, `schedule_post`, `crosspost_post`, `delete_post`, `set_date`,
+`queue_linkedin`, `queue_x`, `queue_instagram`, `queue_tiktok` and `repurpose`. They call
 the app's own `state` and `api` functions, so files, front matter, slugs and the publish
 step are the same; the configured model is only called when a tool is asked to generate.
 They default to the site open in the app. The window checks the post folders every 2 s and

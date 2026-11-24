@@ -100,7 +100,7 @@ pub async fn translate_post(
     );
     let ask = |user: String| {
         let system = system.clone();
-        async move { call(provider, &system, &user, api_key).await }
+        async move { call(provider, &system, &user, api_key, "translate").await }
     };
     let (body, meta) = tokio::join!(ask(body_prompt), ask(meta_prompt));
     let body = body?;

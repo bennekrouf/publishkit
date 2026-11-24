@@ -51,7 +51,7 @@ pub async fn generate_social_post(
         ),
     };
     let user = social_prompt(channel, topic, angle, link);
-    let text = call(provider, &system, &user, api_key).await?;
+    let text = call(provider, &system, &user, api_key, "social_post").await?;
     if channel.links_clickable() {
         Ok(place_link(text.trim(), link.trim()))
     } else {
@@ -225,15 +225,17 @@ pub async fn generate_post(
         Structure: intro, 3-4 sections with ## headings, a conclusion. Aim for ~600-800 words."
     );
 
-    call(provider, &system, &user, api_key).await
+    call(provider, &system, &user, api_key, "blog_post").await
 }
 
 /// api0's OpenAI-compatible chat endpoint, in the region set in Settings.
+/// `feature` names what the call is for in api0's usage log (`X-Feature`).
 pub(crate) async fn call(
     provider: &LlmProvider,
     system: &str,
     user: &str,
     api_key: &str,
+    feature: &'static str,
 ) -> Result<String> {
     let name = provider.label();
     let client = reqwest::Client::new();
@@ -254,6 +256,7 @@ pub(crate) async fn call(
         .header("X-Client-App", crate::api0::PRODUCT)
         // So api0 runs the region's model for writing.
         .header("X-Task", crate::api0::TASK)
+        .header("X-Feature", feature)
         .json(&body)
         .send()
         .await
@@ -306,7 +309,7 @@ pub async fn generate_social_posts(
         Twitter/X: max 250 chars (leave room for the URL), punchy, include the URL."
     );
 
-    let raw = call(provider, &system, &user, api_key).await?;
+    let raw = call(provider, &system, &user, api_key, "social_posts").await?;
 
     // Extract JSON from response (handle potential markdown fences)
     let json_str = raw

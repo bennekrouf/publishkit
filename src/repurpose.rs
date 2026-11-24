@@ -322,7 +322,7 @@ pub async fn generate(
         bail!("the transcript is empty");
     }
     let (system, user, cut) = prompt(request, project_config);
-    let raw = api::call(provider, &system, &user, api_key).await?;
+    let raw = api::call(provider, &system, &user, api_key, "repurpose").await?;
     let plan = parse_plan(&raw)?;
     let (plan, mut notes) = tidy(plan, request);
     if cut {
